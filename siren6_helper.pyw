@@ -72,6 +72,7 @@ class UserSettings:
             "memo": "",
             "memo_const": "",
             "selected_dungeon": "",
+            "selected_monster_floor": 1,
         }
         for key in ITEM_CATEGORIES:
             ret[key] = [False] * len(getattr(tmp, key))
@@ -138,9 +139,12 @@ class MainWindow(MainWindowUI):
         self.init_identification_ui()
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
-        self.obs_manager.connect()
-        QTimer.singleShot(1000, self.check_obs_configuration)
-        self.execute_obs_triggers("app_start")
+        if self.config.obs_enabled:
+            self.obs_manager.connect()
+            QTimer.singleShot(1000, self.check_obs_configuration)
+            self.execute_obs_triggers("app_start")
+        else:
+            self.obs_status_label.setText(self.ui.obs.disabled)
 
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.main_loop)
@@ -179,6 +183,9 @@ class MainWindow(MainWindowUI):
             self.websocket_thread.join(timeout=2.0)
 
     def check_obs_configuration(self):
+        if not self.config.obs_enabled:
+            return
+
         status = self.obs_manager.get_detailed_status()
         warnings = []
 
@@ -217,6 +224,7 @@ class MainWindow(MainWindowUI):
 
     def update_all_configs(self):
         old_port = self.config.websocket_data_port
+        old_obs_enabled = self.config.obs_enabled
         self.config.load_config()
         self.obs_manager.set_config(self.config)
 
@@ -230,6 +238,13 @@ class MainWindow(MainWindowUI):
             self.stop_websocket_server()
             self.start_websocket_server()
             self.broadcast_monster_floor_state()
+
+        if not self.config.obs_enabled:
+            if self.obs_manager.is_connected or old_obs_enabled:
+                self.obs_manager.disconnect()
+            self.obs_status_label.setText(self.ui.obs.disabled)
+            self.capture_status = self.ui.main.waiting_capture
+            return
 
         if not self.obs_manager.is_connected:
             self.obs_manager.connect()
@@ -318,17 +333,22 @@ class MainWindow(MainWindowUI):
 
         self.dungeon_combo.blockSignals(False)
         self.dungeon_combo.currentIndexChanged.connect(self.on_dungeon_changed)
-        self.monster_floor_combo.currentIndexChanged.connect(self.update_monster_table)
-        self.reset_monster_floor_filter()
+        self.monster_floor_combo.currentIndexChanged.connect(self.on_monster_floor_changed)
+        self.reset_monster_floor_filter(self.siren_settings.params.get("selected_monster_floor", 1))
 
     def on_dungeon_changed(self, *_args):
         self.selected_dungeon_key = self.dungeon_combo.currentData() or ""
         self.reset_monster_floor_filter()
         self.update_item_tables()
         self.update_monster_table()
+        self.save_current_selection()
         name = self.dungeon_combo.currentText()
         if name:
             self.statusBar().showMessage(f"ダンジョンを変更しました: {name}", 3000)
+
+    def on_monster_floor_changed(self, *_args):
+        self.update_monster_table()
+        self.save_current_selection()
 
     def current_dungeon(self):
         for dungeon in self.dungeons:
@@ -347,7 +367,7 @@ class MainWindow(MainWindowUI):
     def get_all_items(self, category):
         return getattr(self.itemlist, category)
 
-    def reset_monster_floor_filter(self):
+    def reset_monster_floor_filter(self, preferred_floor=None):
         if not self.monster_floor_combo:
             return
 
@@ -364,7 +384,12 @@ class MainWindow(MainWindowUI):
         max_floor = max(floors) if floors else 99
         for floor in range(1, max_floor + 1):
             self.monster_floor_combo.addItem(f"{floor}F以降", floor)
-        self.monster_floor_combo.setCurrentIndex(0 if self.monster_floor_combo.count() else -1)
+        index = 0 if self.monster_floor_combo.count() else -1
+        if isinstance(preferred_floor, int):
+            preferred_index = self.monster_floor_combo.findData(preferred_floor)
+            if preferred_index >= 0:
+                index = preferred_index
+        self.monster_floor_combo.setCurrentIndex(index)
         self.monster_floor_combo.blockSignals(False)
 
     def update_monster_table(self, *_args):
@@ -426,8 +451,11 @@ class MainWindow(MainWindowUI):
         selected_floor = self.monster_floor_combo.currentData() if self.monster_floor_combo else 1
         if not isinstance(selected_floor, int):
             selected_floor = 1
+        return self.monster_floor_by_number(floors, selected_floor)
+
+    def monster_floor_by_number(self, floors, floor_number):
         for floor in floors:
-            if floor.get("floor") == selected_floor:
+            if floor.get("floor") == floor_number:
                 return floor
         return None
 
@@ -494,12 +522,29 @@ class MainWindow(MainWindowUI):
 
     def current_monster_floor_payload(self):
         dungeon = self.current_dungeon()
+        floors = dungeon.get("monster_floors", []) if dungeon else []
         selected_floor = self.monster_floor_combo.currentData() if self.monster_floor_combo else 1
         if not isinstance(selected_floor, int):
             selected_floor = 1
-        floor = self.selected_monster_floor()
+        floor = self.monster_floor_by_number(floors, selected_floor)
+        next_floor_number = selected_floor + 1
+        next_floor = self.monster_floor_by_number(floors, next_floor_number)
 
-        groups = [
+        groups = self.monster_floor_groups(floor)
+
+        return {
+            "dungeon_key": dungeon.get("key", "") if dungeon else "",
+            "dungeon_name": dungeon.get("name", "") if dungeon else "",
+            "floor": selected_floor,
+            "floor_label": self.format_floor_label(selected_floor),
+            "visibility": floor.get("visibility", "") if floor else "",
+            "groups": groups,
+            "monsters": [monster for group in groups for monster in group["monsters"]],
+            "next_floor": self.monster_floor_payload_part(next_floor, next_floor_number),
+        }
+
+    def monster_floor_groups(self, floor):
+        return [
             {
                 "key": "normal",
                 "label": "出現モンスター",
@@ -517,11 +562,11 @@ class MainWindow(MainWindowUI):
             },
         ]
 
+    def monster_floor_payload_part(self, floor, floor_number):
+        groups = self.monster_floor_groups(floor)
         return {
-            "dungeon_key": dungeon.get("key", "") if dungeon else "",
-            "dungeon_name": dungeon.get("name", "") if dungeon else "",
-            "floor": selected_floor,
-            "floor_label": self.format_floor_label(selected_floor),
+            "floor": floor_number,
+            "floor_label": self.format_floor_label(floor_number),
             "visibility": floor.get("visibility", "") if floor else "",
             "groups": groups,
             "monsters": [monster for group in groups for monster in group["monsters"]],
@@ -663,6 +708,18 @@ class MainWindow(MainWindowUI):
         self.siren_settings.params["memo"] = self.memo_edit.toPlainText()
         self.siren_settings.params["memo_const"] = self.memo_const_edit.toPlainText()
         self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
+        self.siren_settings.params["selected_monster_floor"] = self.current_monster_floor()
+        self.siren_settings.save_settings()
+
+    def current_monster_floor(self):
+        if not self.monster_floor_combo:
+            return 1
+        floor = self.monster_floor_combo.currentData()
+        return floor if isinstance(floor, int) else 1
+
+    def save_current_selection(self):
+        self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
+        self.siren_settings.params["selected_monster_floor"] = self.current_monster_floor()
         self.siren_settings.save_settings()
 
     def save_image(self):
@@ -695,6 +752,10 @@ class MainWindow(MainWindowUI):
     def main_loop(self):
         """OBSから監視対象ソースを定期取得する"""
         try:
+            if not self.config.obs_enabled:
+                self.capture_status = self.ui.main.waiting_capture
+                return
+
             if not self.obs_manager.is_connected or not self.config.monitor_source_name:
                 self.capture_status = self.ui.main.waiting_capture
                 return
@@ -726,6 +787,9 @@ class MainWindow(MainWindowUI):
 
     def execute_obs_triggers(self, trigger: str):
         """指定されたトリガーのOBS制御を実行"""
+        if not self.config.obs_enabled:
+            return
+
         try:
             from src.obs_control import OBSControlData
 
@@ -774,7 +838,8 @@ class MainWindow(MainWindowUI):
     def closeEvent(self, event):
         self.execute_obs_triggers("app_end")
         self.remove_global_hotkeys()
-        self.obs_manager.disconnect()
+        if self.config.obs_enabled:
+            self.obs_manager.disconnect()
         self.save_identification_settings()
         self.save_window_geometry()
 

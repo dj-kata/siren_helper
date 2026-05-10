@@ -77,6 +77,9 @@ class ConfigDialog(QDialog):
         self.websocket_data_port_edit.setValidator(QIntValidator(1000, 65535))
         form.addRow(self.ui.feature.websocket_port, self.websocket_data_port_edit)
 
+        self.obs_enabled_check = QCheckBox(self.ui.feature.obs_enabled)
+        form.addRow(self.obs_enabled_check)
+
         self.keep_on_top_check = QCheckBox(self.ui.feature.keep_on_top)
         form.addRow(self.keep_on_top_check)
 
@@ -103,6 +106,7 @@ class ConfigDialog(QDialog):
     def load_config_values(self):
         self.image_save_path_edit.setText(self.config.image_save_path)
         self.websocket_data_port_edit.setText(str(self.config.websocket_data_port))
+        self.obs_enabled_check.setChecked(self.config.obs_enabled)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.main_font_size_spin.setValue(self.config.main_font_size)
 
@@ -115,6 +119,7 @@ class ConfigDialog(QDialog):
         except ValueError:
             logger.warning("ポート番号の変換に失敗しました。既存値を使用します")
 
+        self.config.obs_enabled = self.obs_enabled_check.isChecked()
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
         self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()

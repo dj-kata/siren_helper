@@ -92,6 +92,11 @@ class OBSWebSocketManager(QObject):
         if not self.config:
             self._emit_status(self.ui.obs.not_configured, False)
             return False
+
+        if not self.config.obs_enabled:
+            self.disconnect()
+            self._emit_status(self.ui.obs.disabled, False)
+            return False
         
         try:
             # 既存の接続を切断
@@ -208,6 +213,10 @@ class OBSWebSocketManager(QObject):
                 if not self.config:
                     time.sleep(check_interval)
                     continue
+
+                if not self.config.obs_enabled:
+                    self._emit_status(self.ui.obs.disabled, False)
+                    break
                 
                 # 接続状態チェック
                 if self.is_connected and self.client:
@@ -304,6 +313,8 @@ class OBSWebSocketManager(QObject):
             return "obsws_python がインストールされていません", False
         elif not self.config:
             return self.ui.obs.not_configured, False
+        elif not self.config.obs_enabled:
+            return self.ui.obs.disabled, False
         elif not self.is_connected:
             return self.ui.obs.not_connected, False
         elif not self.is_monitor_source_configured():

@@ -73,6 +73,7 @@ class UIText:
         image_save_path = '画像保存先:'
         autoload_offset = '自動読み込みオフセット:'
         websocket_port = 'データ表示用port:'
+        obs_enabled = 'OBS連携を有効にする'
         keep_on_top = '常に最前面表示する'
         main_font_size = 'メイン画面のフォントサイズ:'
     
@@ -202,6 +203,7 @@ class UIText:
         not_connected  = "未接続"
         no_source = "監視対象ソース未設定"
         connected = '接続中'
+        disabled = 'OBS連携OFF'
 
         # 制御設定ダイアログ関連
         websocket_group = 'OBS WebSocket接続設定'

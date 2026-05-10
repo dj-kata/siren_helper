@@ -21,6 +21,7 @@ class Config:
         self.config_file = config_file
 
         # OBS WebSocket
+        self.obs_enabled = True
         self.websocket_host = "localhost"
         self.websocket_port = 4444
         self.websocket_password = ""
@@ -60,6 +61,7 @@ class Config:
             with open(self.config_file, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
 
+            self.obs_enabled = bool(config_data.get("obs_enabled", self.obs_enabled))
             self.websocket_host = config_data.get("websocket_host", self.websocket_host)
             self.websocket_port = config_data.get("websocket_port", self.websocket_port)
             self.websocket_password = config_data.get("websocket_password", self.websocket_password)
@@ -91,6 +93,7 @@ class Config:
     def save_config(self):
         """設定ファイルに設定を保存する"""
         config_data = {
+            "obs_enabled": self.obs_enabled,
             "websocket_host": self.websocket_host,
             "websocket_port": self.websocket_port,
             "websocket_password": self.websocket_password,
@@ -131,6 +134,7 @@ class Config:
             {
                 "websocket_host": self.websocket_host,
                 "websocket_port": self.websocket_port,
+                "obs_enabled": self.obs_enabled,
                 "monitor_source_name": self.monitor_source_name,
                 "obs_scene_collection": self.obs_scene_collection,
                 "image_save_path": self.image_save_path,

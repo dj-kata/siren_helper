@@ -608,6 +608,9 @@ class OBSControlDialog(QDialog):
     
     def reconnect_obs(self):
         """OBSに再接続"""
+        if not self.config.obs_enabled:
+            return
+
         try:
             self.obs_manager.disconnect()
             success = self.obs_manager.connect()

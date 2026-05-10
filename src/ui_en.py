@@ -73,6 +73,7 @@ class UIText:
         image_save_path = 'Image save path:'
         autoload_offset = 'Auto-load offset:'
         websocket_port = 'Data display port:'
+        obs_enabled = 'Enable OBS integration'
         keep_on_top = 'Always on Top'
         main_font_size = 'Main window font size:'
     
@@ -202,6 +203,7 @@ class UIText:
         not_connected  = "Not connected"
         no_source = "Target source is not set"
         connected = 'Connected'
+        disabled = 'OBS integration OFF'
 
         # 制御設定ダイアログ関連
         websocket_group = 'OBS WebSocket Connect Settings'
