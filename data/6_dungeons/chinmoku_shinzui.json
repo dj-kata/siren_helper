@@ -1,0 +1,936 @@
+{
+  "name": "沈黙の神髄",
+  "key": "chinmoku_shinzui",
+  "url": "https://shiren6.game-info.wiki/d/%c4%c0%cc%db%a4%ce%bf%c0%bf%f1",
+  "title": "沈黙の神髄 - 風来のシレン6 とぐろ島探検録 Wiki",
+  "generated_at": "2026-05-10 06:53:38",
+  "fetched_at": "2026-05-10T10:34:12.914441+00:00",
+  "source_notes": [
+    "item tables contained no available items after filtering placeholders"
+  ],
+  "monster_table": {
+    "table_id": "content_block_37",
+    "columns": [
+      "階",
+      "視界",
+      "マゼ種",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "その他の出現モンスター",
+      "編集"
+    ],
+    "floors": [
+      {
+        "floor": 1,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 2,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 3,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 4,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 5,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 6,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 7,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 8,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 9,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 10,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 11,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 12,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 13,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 14,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 15,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 16,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 17,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 18,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 19,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 20,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 21,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 22,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 23,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 24,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 25,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 26,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 27,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 28,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 29,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼルン"
+        ]
+      },
+      {
+        "floor": 30,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 31,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 32,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 33,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 34,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 35,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 36,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 37,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 38,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 39,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 40,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼモン"
+        ]
+      },
+      {
+        "floor": 41,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼモン"
+        ]
+      },
+      {
+        "floor": 42,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 43,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 44,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼモン"
+        ]
+      },
+      {
+        "floor": 45,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼモン"
+        ]
+      },
+      {
+        "floor": 46,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 47,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 48,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼモン"
+        ]
+      },
+      {
+        "floor": 49,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 50,
+        "visibility": "明",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 51,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 52,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 53,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 54,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 55,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 56,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 57,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 58,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 59,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 60,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 61,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 62,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 63,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 64,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 65,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 66,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼゴン"
+        ]
+      },
+      {
+        "floor": 67,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 68,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": [
+          "マゼゴン"
+        ]
+      },
+      {
+        "floor": 69,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 70,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 71,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 72,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 73,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 74,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 75,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 76,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 77,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 78,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 79,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 80,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 81,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 82,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 83,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 84,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 85,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 86,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 87,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 88,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 89,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 90,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 91,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 92,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 93,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 94,
+        "visibility": "暗",
+        "monsters": [],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 95,
+        "visibility": "暗",
+        "monsters": [
+          "いやしウサギ",
+          "ふんかウニ",
+          "煉獄入道",
+          "冥王",
+          "マルジロウ祖父",
+          "エレキロイド",
+          "ふくりゅう",
+          "タイガーウホーン",
+          "大将軍"
+        ],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 96,
+        "visibility": "暗",
+        "monsters": [
+          "いやしウサギ",
+          "ふんかウニ",
+          "煉獄入道",
+          "冥王",
+          "マルジロウ祖父",
+          "エレキロイド",
+          "ふくりゅう",
+          "タイガーウホーン",
+          "大将軍"
+        ],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 97,
+        "visibility": "暗",
+        "monsters": [
+          "いやしウサギ",
+          "ふんかウニ",
+          "煉獄入道",
+          "冥王",
+          "マルジロウ祖父",
+          "エレキロイド",
+          "ふくりゅう",
+          "タイガーウホーン",
+          "大将軍"
+        ],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 98,
+        "visibility": "暗",
+        "monsters": [
+          "いやしウサギ",
+          "ふんかウニ",
+          "煉獄入道",
+          "冥王",
+          "マルジロウ祖父",
+          "エレキロイド",
+          "ふくりゅう",
+          "タイガーウホーン",
+          "大将軍"
+        ],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      },
+      {
+        "floor": 99,
+        "visibility": "暗",
+        "monsters": [
+          "いやしウサギ",
+          "ふんかウニ",
+          "煉獄入道",
+          "冥王",
+          "マルジロウ祖父",
+          "エレキロイド",
+          "ふくりゅう",
+          "タイガーウホーン",
+          "大将軍"
+        ],
+        "dekkai": false,
+        "dekkai_monsters": [],
+        "maze_monsters": []
+      }
+    ]
+  },
+  "items": {
+    "columns": [
+      "名称",
+      "床 / 落",
+      "店 / 売",
+      "壁",
+      "ト / ド",
+      "変 / 化",
+      "ビ / 壺",
+      "願 / い",
+      "熱 / 狂",
+      "デ / 怪",
+      "太 / 陽",
+      "雨",
+      "その他入手方法",
+      "編集"
+    ],
+    "table_count": 10,
+    "items": []
+  }
+}
