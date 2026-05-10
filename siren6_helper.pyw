@@ -24,10 +24,10 @@ except ImportError:
     KEYBOARD_AVAILABLE = False
     print("警告: keyboardライブラリがインストールされていません。グローバルホットキーは無効です。")
 
-from item import ItemList
 from src.config import Config
 from src.config_dialog import ConfigDialog
 from src.funcs import escape_for_filename
+from src.item import ItemList
 from src.logger import get_logger
 from src.main_window import MainWindowUI
 from src.obs_dialog import OBSControlDialog
