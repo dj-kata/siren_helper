@@ -162,6 +162,22 @@ body {
   font-weight: 900;
 }
 
+.dekkai-badge {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #3b0b67;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
 .monster-name {
   width: calc(var(--show-details) * 66px);
   height: calc(var(--show-details) * 32px);
@@ -237,6 +253,12 @@ body:not(.details) .dekkai-label {
   transform: translateY(1px);
 }
 
+body:not(.details) .dekkai-badge {
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+}
+
 body:not(.details) .dekkai-cluster .monster {
   width: 21px;
   height: 21px;
@@ -286,9 +308,12 @@ body.details .group-label {
 
 body.details .monster-grid {
   gap: 8px;
+  justify-content: flex-start;
 }
 
 body.details .monster {
+  flex: 0 0 auto;
+  width: max(66px, var(--icon-size));
   padding: 6px 5px 5px;
   border: 1px solid var(--border);
   border-radius: 7px;
@@ -300,9 +325,20 @@ body.details .icon-wrap {
 }
 
 body.details .monster-name {
-  width: auto;
+  width: max(66px, var(--icon-size));
   height: 32px;
   opacity: 1;
+}
+
+@media (max-width: 300px) {
+  body.details .group {
+    grid-template-columns: 1fr;
+  }
+
+  body.details .group-label {
+    width: fit-content;
+    max-width: 100%;
+  }
 }
 
 </style>
@@ -332,8 +368,14 @@ const groups = document.getElementById("groups");
 
 let reconnectTimer = null;
 
+function readDetailsValue() {
+  const bodyValue = getComputedStyle(document.body).getPropertyValue("--show-details").trim();
+  const rootValue = getComputedStyle(document.documentElement).getPropertyValue("--show-details").trim();
+  return bodyValue || rootValue || "0";
+}
+
 function applyDetailsMode() {
-  const rawValue = getComputedStyle(document.documentElement).getPropertyValue("--show-details").trim();
+  const rawValue = readDetailsValue();
   document.body.classList.toggle("details", Number.parseFloat(rawValue) > 0);
 }
 
@@ -411,7 +453,7 @@ function render(data) {
     const grid = document.createElement("div");
     grid.className = "monster-grid";
     for (const monster of group.monsters || []) {
-      grid.appendChild(createMonster(monster, group.key));
+      grid.appendChild(group.key === "dekkai" ? createDekkaiMonster(monster) : createMonster(monster, group.key));
     }
     section.appendChild(grid);
     groups.appendChild(section);
@@ -445,13 +487,35 @@ function createMonster(monster, groupKey) {
   return item;
 }
 
+function createDekkaiMonster(monster) {
+  const item = document.createElement("article");
+  item.className = "monster";
+
+  const iconWrap = document.createElement("div");
+  iconWrap.className = "icon-wrap";
+
+  const badge = document.createElement("div");
+  badge.className = "dekkai-badge";
+  badge.textContent = "デッ";
+
+  iconWrap.appendChild(badge);
+  item.appendChild(iconWrap);
+
+  const name = document.createElement("div");
+  name.className = "monster-name";
+  name.textContent = monster.name || "デッ怪";
+  item.appendChild(name);
+
+  return item;
+}
+
 function createDekkaiCluster(monsters) {
   const cluster = document.createElement("div");
   cluster.className = "dekkai-cluster";
-  const label = document.createElement("div");
-  label.className = "dekkai-label";
-  label.textContent = "デッ";
-  cluster.appendChild(label);
+  const badge = document.createElement("div");
+  badge.className = "dekkai-badge";
+  badge.textContent = "デッ";
+  cluster.appendChild(badge);
   return cluster;
 }
 
@@ -466,6 +530,10 @@ function setImageSource(img, fallback, sources, index) {
 }
 
 applyDetailsMode();
+window.addEventListener("load", applyDetailsMode);
+requestAnimationFrame(applyDetailsMode);
+setTimeout(applyDetailsMode, 250);
+setTimeout(applyDetailsMode, 1000);
 connect();
 </script>
 </body>
