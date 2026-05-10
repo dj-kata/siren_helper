@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QComboBox,
     QTabWidget,
     QTableWidget,
     QVBoxLayout,
@@ -53,7 +54,11 @@ class MainWindowUI(QMainWindow):
         self.last_capture_label = None
         self.save_image_button = None
         self.top_tabs = None
+        self.dungeon_data_tabs = None
         self.identify_tabs = None
+        self.dungeon_combo = None
+        self.monster_floor_combo = None
+        self.monster_table = None
         self.item_tables = {}
         self.item_count_labels = {}
         self.mark_identified_button = None
@@ -117,7 +122,7 @@ class MainWindowUI(QMainWindow):
 
         obs_tab_layout.addStretch()
         self.top_tabs.addTab(obs_tab, "OBS")
-        self.top_tabs.addTab(self.create_identification_tab(), "識別")
+        self.top_tabs.addTab(self.create_identification_tab(), "ダンジョン")
         self.top_tabs.addTab(self.create_memo_tab(), "メモ")
 
         self.statusBar().showMessage(self.ui.main.status_ready)
@@ -125,6 +130,18 @@ class MainWindowUI(QMainWindow):
     def create_identification_tab(self):
         tab = QWidget()
         layout = QVBoxLayout(tab)
+
+        dungeon_layout = QHBoxLayout()
+        dungeon_layout.addWidget(QLabel("ダンジョン:"))
+        self.dungeon_combo = QComboBox()
+        self.dungeon_combo.setMinimumWidth(220)
+        dungeon_layout.addWidget(self.dungeon_combo)
+        dungeon_layout.addStretch()
+        layout.addLayout(dungeon_layout)
+
+        self.dungeon_data_tabs = QTabWidget()
+        item_tab = QWidget()
+        item_layout = QVBoxLayout(item_tab)
 
         self.identify_tabs = QTabWidget()
         table_specs = [
@@ -160,7 +177,7 @@ class MainWindowUI(QMainWindow):
             self.item_tables[key] = table
             self.identify_tabs.addTab(table, label)
 
-        layout.addWidget(self.identify_tabs)
+        item_layout.addWidget(self.identify_tabs)
 
         button_layout = QHBoxLayout()
         self.mark_identified_button = QPushButton("識別済にする")
@@ -170,7 +187,7 @@ class MainWindowUI(QMainWindow):
         button_layout.addWidget(self.mark_unknown_button)
         button_layout.addStretch()
         button_layout.addWidget(self.reset_button)
-        layout.addLayout(button_layout)
+        item_layout.addLayout(button_layout)
 
         count_layout = QHBoxLayout()
         for key, label in [
@@ -186,7 +203,36 @@ class MainWindowUI(QMainWindow):
             self.item_count_labels[key] = count
             count_layout.addWidget(count)
         count_layout.addStretch()
-        layout.addLayout(count_layout)
+        item_layout.addLayout(count_layout)
+
+        monster_tab = QWidget()
+        monster_layout = QVBoxLayout(monster_tab)
+        monster_filter_layout = QHBoxLayout()
+        monster_filter_layout.addWidget(QLabel("表示開始階:"))
+        self.monster_floor_combo = QComboBox()
+        self.monster_floor_combo.setMinimumWidth(100)
+        monster_filter_layout.addWidget(self.monster_floor_combo)
+        monster_filter_layout.addStretch()
+        monster_layout.addLayout(monster_filter_layout)
+
+        self.monster_table = QTableWidget(0, 5)
+        self.monster_table.setHorizontalHeaderLabels(["階", "視界", "出現モンスター", "デッ怪", "マゼ種"])
+        self.monster_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.monster_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.monster_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.monster_table.setWordWrap(False)
+        self.monster_table.verticalHeader().setVisible(False)
+        self.monster_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.monster_table.horizontalHeader().setStretchLastSection(True)
+        self.monster_table.setColumnWidth(0, 60)
+        self.monster_table.setColumnWidth(1, 60)
+        self.monster_table.setColumnWidth(2, 520)
+        self.monster_table.setColumnWidth(3, 180)
+        monster_layout.addWidget(self.monster_table)
+
+        self.dungeon_data_tabs.addTab(item_tab, "アイテム")
+        self.dungeon_data_tabs.addTab(monster_tab, "モンスター")
+        layout.addWidget(self.dungeon_data_tabs)
 
         return tab
 

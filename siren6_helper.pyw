@@ -46,6 +46,7 @@ except Exception:
 
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
 STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
+DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
 
 
 class UserSettings:
@@ -64,6 +65,7 @@ class UserSettings:
             "lh": 930,
             "memo": "",
             "memo_const": "",
+            "selected_dungeon": "",
         }
         for key in ITEM_CATEGORIES:
             ret[key] = [False] * len(getattr(tmp, key))
@@ -107,6 +109,8 @@ class MainWindow(MainWindowUI):
         self.siren_settings = UserSettings()
         self.itemlist = ItemList()
         self.itemlist.load(self.siren_settings.params)
+        self.dungeons = self.load_dungeon_filters()
+        self.selected_dungeon_key = self.default_dungeon_key()
 
         self.obs_manager = OBSWebSocketManager()
         self.obs_manager.set_config(self.config)
@@ -238,13 +242,205 @@ class MainWindow(MainWindowUI):
     def init_identification_ui(self):
         self.memo_edit.setPlainText(self.siren_settings.params.get("memo", ""))
         self.memo_const_edit.setPlainText(self.siren_settings.params.get("memo_const", ""))
+        self.init_dungeon_combo()
         self.mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
         self.mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
         self.reset_button.clicked.connect(self.reset_identification)
         self.update_item_tables()
 
+    def load_dungeon_filters(self):
+        dungeon_dir = Path("data/6_dungeons")
+        if not dungeon_dir.exists():
+            return []
+
+        preferred_order = ["toguro_shinzui", "chinmoku_shinzui", "cho_shinzui"]
+        reverse_categories = {
+            json_key: category
+            for category, json_key in ItemList.category_json_keys.items()
+        }
+        dungeons = []
+
+        for path in sorted(dungeon_dir.glob("*.json")):
+            try:
+                with path.open(encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                logger.warning(f"ダンジョンデータの読み込みに失敗しました: {path}")
+                continue
+            key = data.get("key") or path.stem
+            if key in DISABLED_DUNGEON_KEYS:
+                continue
+
+            item_names_by_category = {category: set() for category in ITEM_CATEGORIES}
+            for item in data.get("items", {}).get("items", []):
+                category = reverse_categories.get(item.get("category", ""))
+                name = item.get("name", "")
+                if category and name:
+                    item_names_by_category[category].add(name)
+
+            dungeons.append({
+                "key": key,
+                "name": data.get("name") or path.stem,
+                "path": str(path),
+                "item_names_by_category": item_names_by_category,
+                "monster_floors": data.get("monster_table", {}).get("floors", []),
+            })
+
+        order = {key: index for index, key in enumerate(preferred_order)}
+        return sorted(dungeons, key=lambda dungeon: (order.get(dungeon["key"], 999), dungeon["name"]))
+
+    def default_dungeon_key(self):
+        saved_key = self.siren_settings.params.get("selected_dungeon", "")
+        available_keys = {dungeon["key"] for dungeon in self.dungeons}
+        if saved_key in available_keys:
+            return saved_key
+        return self.dungeons[0]["key"] if self.dungeons else ""
+
+    def init_dungeon_combo(self):
+        self.dungeon_combo.blockSignals(True)
+        self.dungeon_combo.clear()
+        for dungeon in self.dungeons:
+            self.dungeon_combo.addItem(dungeon["name"], dungeon["key"])
+
+        current_index = self.dungeon_combo.findData(self.selected_dungeon_key)
+        if current_index < 0 and self.dungeon_combo.count() > 0:
+            current_index = 0
+            self.selected_dungeon_key = self.dungeon_combo.itemData(0)
+        if current_index >= 0:
+            self.dungeon_combo.setCurrentIndex(current_index)
+
+        self.dungeon_combo.blockSignals(False)
+        self.dungeon_combo.currentIndexChanged.connect(self.on_dungeon_changed)
+        self.monster_floor_combo.currentIndexChanged.connect(self.update_monster_table)
+        self.reset_monster_floor_filter()
+
+    def on_dungeon_changed(self, *_args):
+        self.selected_dungeon_key = self.dungeon_combo.currentData() or ""
+        self.reset_monster_floor_filter()
+        self.update_item_tables()
+        self.update_monster_table()
+        name = self.dungeon_combo.currentText()
+        if name:
+            self.statusBar().showMessage(f"ダンジョンを変更しました: {name}", 3000)
+
+    def current_dungeon(self):
+        for dungeon in self.dungeons:
+            if dungeon["key"] == self.selected_dungeon_key:
+                return dungeon
+        return None
+
     def get_target_items(self, category):
+        items = getattr(self.itemlist, category)
+        dungeon = self.current_dungeon()
+        if not dungeon:
+            return items
+        item_names = dungeon["item_names_by_category"].get(category, set())
+        return [item for item in items if item.name in item_names]
+
+    def get_all_items(self, category):
         return getattr(self.itemlist, category)
+
+    def reset_monster_floor_filter(self):
+        if not self.monster_floor_combo:
+            return
+
+        self.monster_floor_combo.blockSignals(True)
+        self.monster_floor_combo.clear()
+        dungeon = self.current_dungeon()
+        floors = []
+        if dungeon:
+            floors = [
+                floor.get("floor")
+                for floor in dungeon.get("monster_floors", [])
+                if isinstance(floor.get("floor"), int)
+            ]
+        max_floor = max(floors) if floors else 99
+        for floor in range(1, max_floor + 1):
+            self.monster_floor_combo.addItem(f"{floor}F以降", floor)
+        self.monster_floor_combo.setCurrentIndex(0 if self.monster_floor_combo.count() else -1)
+        self.monster_floor_combo.blockSignals(False)
+
+    def update_monster_table(self, *_args):
+        if not self.monster_table:
+            return
+
+        dungeon = self.current_dungeon()
+        floors = dungeon.get("monster_floors", []) if dungeon else []
+        start_floor = self.monster_floor_combo.currentData() if self.monster_floor_combo else 1
+        if not isinstance(start_floor, int):
+            start_floor = 1
+        target = [
+            floor
+            for floor in floors
+            if not isinstance(floor.get("floor"), int) or floor.get("floor") >= start_floor
+        ]
+
+        self.monster_table.setRowCount(len(target))
+        monster_slots = max((len(floor.get("monster_cells") or floor.get("monsters", [])) for floor in target), default=0)
+        dekkai_slots = max((len(floor.get("dekkai_cells") or floor.get("dekkai_monsters", [])) for floor in target), default=0)
+        maze_slots = max((len(floor.get("maze_cells") or floor.get("maze_monsters", [])) for floor in target), default=0)
+        headers = (
+            ["階", "視界"]
+            + [f"M{i}" for i in range(1, monster_slots + 1)]
+            + [f"デッ怪{i}" for i in range(1, dekkai_slots + 1)]
+            + [f"マゼ種{i}" for i in range(1, maze_slots + 1)]
+        )
+        self.monster_table.setColumnCount(len(headers))
+        self.monster_table.setHorizontalHeaderLabels(headers)
+        self.monster_table.setColumnWidth(0, 60)
+        self.monster_table.setColumnWidth(1, 60)
+        for column in range(2, len(headers)):
+            self.monster_table.setColumnWidth(column, 120)
+
+        row_height = self.monster_table.fontMetrics().height() + 6
+        self.monster_table.verticalHeader().setDefaultSectionSize(row_height)
+
+        for row, floor in enumerate(target):
+            self.set_monster_table_item(row, 0, self.format_floor_label(floor.get("floor", "")))
+            self.set_monster_table_item(
+                row,
+                1,
+                floor.get("visibility", ""),
+                floor.get("visibility_background", ""),
+                floor.get("visibility_foreground", ""),
+            )
+
+            column = 2
+            column = self.fill_monster_cells(row, column, monster_slots, floor, "monster_cells", "monsters")
+            column = self.fill_monster_cells(row, column, dekkai_slots, floor, "dekkai_cells", "dekkai_monsters")
+            self.fill_monster_cells(row, column, maze_slots, floor, "maze_cells", "maze_monsters")
+            self.monster_table.setRowHeight(row, row_height)
+
+    def format_floor_label(self, floor):
+        return f"{floor}F" if isinstance(floor, int) else str(floor)
+
+    def fill_monster_cells(self, row, start_column, slot_count, floor, cell_key, names_key):
+        cells = floor.get(cell_key)
+        if not cells:
+            cells = [{"name": name} for name in floor.get(names_key, [])]
+        for offset in range(slot_count):
+            if offset < len(cells):
+                cell = cells[offset]
+                self.set_monster_table_item(
+                    row,
+                    start_column + offset,
+                    cell.get("name", ""),
+                    cell.get("background", ""),
+                    cell.get("foreground", ""),
+                )
+            else:
+                self.set_monster_table_item(row, start_column + offset, "")
+        return start_column + slot_count
+
+    def set_monster_table_item(self, row, column, value, background="", foreground=""):
+        cell = QTableWidgetItem(str(value))
+        background_color = QColor(background)
+        if background and background_color.isValid():
+            cell.setBackground(QBrush(background_color))
+        foreground_color = QColor(foreground)
+        if foreground and foreground != background and foreground_color.isValid():
+            cell.setForeground(QBrush(foreground_color))
+        self.monster_table.setItem(row, column, cell)
 
     def set_selected_items_identified(self, identified: bool):
         category = ITEM_CATEGORIES[self.identify_tabs.currentIndex()]
@@ -269,6 +465,8 @@ class MainWindow(MainWindowUI):
     def reset_identification(self):
         self.itemlist.reset()
         self.memo_edit.clear()
+        self.reset_monster_floor_filter()
+        self.update_monster_table()
         self.update_item_tables()
         self.statusBar().showMessage("リセットしました", 3000)
 
@@ -281,6 +479,7 @@ class MainWindow(MainWindowUI):
             self.item_count_labels[category].setText(f"{count}/{total}")
 
         self.write_stat_xml(counts)
+        self.update_monster_table()
 
     def update_item_table(self, category):
         table = self.item_tables[category]
@@ -342,6 +541,7 @@ class MainWindow(MainWindowUI):
         self.itemlist.save(self.siren_settings.params)
         self.siren_settings.params["memo"] = self.memo_edit.toPlainText()
         self.siren_settings.params["memo_const"] = self.memo_const_edit.toPlainText()
+        self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
         self.siren_settings.save_settings()
 
     def save_image(self):
