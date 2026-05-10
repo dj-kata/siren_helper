@@ -1,393 +1,483 @@
-import PySimpleGUI as sg
+"""
+Siren 6 Helper - メインプログラム
+OBS連携でゲーム画面を自動取得しながら識別情報を管理するための骨組み。
+"""
+
+import asyncio
+import datetime
+import json
+import os
+import sys
+import threading
+import traceback
+from pathlib import Path
+
+from PySide6.QtCore import QTimer, Qt
+from PySide6.QtGui import QBrush, QColor, QIcon
+from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+
+try:
+    import keyboard
+
+    KEYBOARD_AVAILABLE = True
+except ImportError:
+    KEYBOARD_AVAILABLE = False
+    print("警告: keyboardライブラリがインストールされていません。グローバルホットキーは無効です。")
+
 from item import ItemList
-from enum import Enum
-from inlist import bukiin,tatein
-from monster import MonsterList
-import os, json, codecs
-# TODO self.modeを廃止する
+from src.config import Config
+from src.config_dialog import ConfigDialog
+from src.funcs import escape_for_filename
+from src.logger import get_logger
+from src.main_window import MainWindowUI
+from src.obs_dialog import OBSControlDialog
+from src.obs_websocket_manager import OBSWebSocketManager
+from src.update import GitHubUpdater
+from src.websocket_server import DataWebSocketServer
 
-SWNAME = 'siren6_helper'
-SWVER  = 'v1.0.0'
+logger = get_logger("new_siren6_helper")
 
-class gui_mode(Enum):
-    main=1
+try:
+    with open("version.txt", "r", encoding="utf-8") as f:
+        tmp = f.readline()
+        SWVER = tmp.strip()[1:] if tmp.startswith("v") else tmp.strip()
+except Exception:
+    SWVER = "0.0.0"
+
+ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
+STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
+
 
 class UserSettings:
-    def __init__(self, savefile='settings.json'):
+    """siren6_helper.pyw と互換性のある識別・メモ設定"""
+
+    def __init__(self, savefile="settings.json"):
         self.savefile = savefile
-        self.params   = self.load_settings()
+        self.params = self.load_settings()
+
     def get_default_settings(self):
         tmp = ItemList()
         ret = {
-        'lx':0,'ly':0,'lw':970,'lh':930,'memo':'', 'memo_const':'',
+            "lx": 0,
+            "ly": 0,
+            "lw": 970,
+            "lh": 930,
+            "memo": "",
+            "memo_const": "",
         }
-        ret['kusa']     = [0]*len(tmp.kusa)
-        ret['makimono'] = [0]*len(tmp.makimono)
-        ret['udewa']    = [0]*len(tmp.udewa)
-        ret['tubo']     = [0]*len(tmp.tubo)
-        ret['okou']     = [0]*len(tmp.okou)
-        ret['tue']      = [0]*len(tmp.tue)
-        ret['buki']     = [0]*len(tmp.buki)
-        ret['tate']     = [0]*len(tmp.tate)
+        for key in ITEM_CATEGORIES:
+            ret[key] = [False] * len(getattr(tmp, key))
         return ret
+
     def load_settings(self):
         default_val = self.get_default_settings()
         ret = {}
         try:
-            with open(self.savefile) as f:
+            with open(self.savefile, "r", encoding="utf-8") as f:
                 ret = json.load(f)
-                print(f"設定をロードしました。\n")
         except Exception:
-            print(f"有効な設定ファイルなし。デフォルト値を使います。")
+            logger.info("有効な識別設定ファイルなし。デフォルト値を使います。")
 
-        ### 後から追加した値がない場合にもここでケア
-        for k in default_val.keys():
-            if not k in ret.keys():
-                print(f"{k}が設定ファイル内に存在しません。デフォルト値({default_val[k]}を登録します。)")
-                ret[k] = default_val[k]
+        for key, value in default_val.items():
+            if key not in ret:
+                ret[key] = value
+
+        for key in ITEM_CATEGORIES:
+            ret[key] = self._normalize_bool_list(ret.get(key, []), len(default_val[key]))
 
         return ret
 
+    def _normalize_bool_list(self, values, length):
+        normalized = [bool(v) for v in values[:length]]
+        normalized.extend([False] * (length - len(normalized)))
+        return normalized
+
     def save_settings(self):
-        with open(self.savefile, 'w') as f:
-            json.dump(self.params, f, indent=2)
+        with open(self.savefile, "w", encoding="utf-8") as f:
+            json.dump(self.params, f, ensure_ascii=False, indent=2)
 
-class GUI:
+
+class MainWindow(MainWindowUI):
+    """メインウィンドウクラス - 制御ロジックを担当"""
+
     def __init__(self):
-        self.savefile = 'settings.json'
-        self.settings = UserSettings(self.savefile)
-        #print(self.settings.params)
-        sg.theme('SystemDefault')
-        self.FONT = ('Meiryo',16)
-        self.mode = 'kusa'
-        self.window = False
+        self.config = Config()
+        super().__init__(self.config)
+
+        self.siren_settings = UserSettings()
         self.itemlist = ItemList()
-        self.itemlist.load(self.settings.params)
-        self.conv_tabname = {'草':'kusa', '巻物':'makimono','腕輪':'udewa','壺':'tubo','お香':'okou', '杖':'tue'}
+        self.itemlist.load(self.siren_settings.params)
 
-    # icon用
-    def ico_path(self, relative_path):
-        try:
-            base_path = sys._MEIPASS
-        except Exception:
-            base_path = os.path.abspath(".")
-        return os.path.join(base_path, relative_path)
+        self.obs_manager = OBSWebSocketManager()
+        self.obs_manager.set_config(self.config)
+        self.obs_manager.connection_changed.connect(self.on_obs_connection_changed)
 
-    def gui_main(self): #メインウィンドウ
-        if self.window:
-            self.window.close()
-        header=['名前','容量','買値','売値','武器印', '盾印', 'メモ']
-        menuitems = [['ファイル',['設定',]],['ヘルプ',[f'{SWNAME}について']]]
-        right_click_menu = ['&Right', ['貼り付け']]
-        layout_det_table = []
-        for i,k in enumerate(['kusa', 'makimono', 'udewa', 'tubo', 'okou', 'tue', 'buki', 'tate']):
-            wmod = 7 if i in (3, 4) else 0
-            layout_det_table.append(sg.Table([], key=f'table_{k}', headings=header,font=self.FONT
-                    ,vertical_scroll_only=False
-                    ,auto_size_columns=False
-                    ,col_widths=[15,5,6+wmod,6+wmod,10,10,100]
-                    ,justification='left'
-                    ,size=(1,10)
-                    ,background_color='#ffffff'
-                    ,alternating_row_color='#dddddd'
-                    )
-            )
-        layout_det = [
-            [sg.TabGroup([
-                [
-                    sg.Tab('草', [[layout_det_table[0]]]),
-                    sg.Tab('巻物', [[layout_det_table[1]]]),
-                    sg.Tab('腕輪', [[layout_det_table[2]]]),
-                    sg.Tab('壺', [[layout_det_table[3]]]),
-                    sg.Tab('お香', [[layout_det_table[4]]]),
-                    sg.Tab('杖', [[layout_det_table[5]]]),
-                    sg.Tab('武器(Lv1)', [[layout_det_table[6]]]),
-                    sg.Tab('盾(Lv1)', [[layout_det_table[7]]]),
-                ]
-            ],key='tg_det',font=self.FONT)],
-            [sg.Button('識別済にする', key='btn_get', font=self.FONT), sg.Button('未識別に戻す', key='btn_lost', font=self.FONT), ],
-            [
-                sg.Text('草:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_kusa'),
-                sg.Text('巻物:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_makimono'),
-                sg.Text('腕輪:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_udewa'),
-                sg.Text('壺:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_tubo'),
-                sg.Text('お香:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_okou'),
-                sg.Text('杖:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_tue'),
-            ],
-            #[
-            #    sg.Text('100G草:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_100kusa'),
-            #    sg.Text('300G草:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_300kusa'),
-            #    sg.Text('500G草:', font=self.FONT), sg.Text('0/0', font=self.FONT, key='cnt_500kusa'),
-            #],
-        ]
-        layout_monster =[
-            [sg.Text('この階層以降を表示:', font=self.FONT), sg.Combo([f"{i}" for i in range(1,100)], default_value='1', readonly=True, font=self.FONT, enable_events=True, key='floor')],
-            [sg.Table([['']*10 for i in range(99)], headings=['階層','1','2','3','4','5','6','7','8','9'], key='table_monster', font=self.FONT
-                    ,vertical_scroll_only=False
-                    ,auto_size_columns=False
-                    ,col_widths=[4,13,13,13,13,13,13,13,13,13]
-                    ,justification='left'
-                    ,size=(1,10)
-                    ,background_color='#ffffff'
-                    ,alternating_row_color='#dddddd'
-                    )
-            ],
-        ]
-        layout_memo = [
-            [sg.Text('メモ(冒険用)',font=self.FONT)],
-            [sg.Multiline('', key='memo',font=self.FONT)],
-            [sg.Text('メモ(リセット時に削除されない)',font=self.FONT)],
-            [sg.Multiline('', key='memo_const',font=self.FONT)],
-        ]
-        layout = [
-            #[sg.TabGroup([[sg.Tab('識別', layout_det, key='tab_det'), sg.Tab('装備品', layout_soubi, key='tab_soubi'), sg.Tab('モンスター', layout_monster, key='tab_monster'), sg.Tab('メモ', layout_memo, key='tab_memo')]],key='tg_top',font=self.FONT)],
-            [sg.TabGroup([[sg.Tab('識別', layout_det, key='tab_det'), sg.Tab('メモ', layout_memo, key='tab_memo')]],key='tg_top',font=self.FONT)],
-            [sg.Button('リセット', key='btn_reset', font=self.FONT)],
-            [sg.Text('', key='txt_info', font=('Meiryo',10))],
-        ]
-        ico=self.ico_path('icon.ico')
-        #self.window = sg.Window(SWNAME, layout, grab_anywhere=True,return_keyboard_events=True,resizable=True,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(self.settings.params['lw'],self.settings.params['lh']))
-        self.window = sg.Window(SWNAME, layout, grab_anywhere=True,return_keyboard_events=True,resizable=True,finalize=True,enable_close_attempted_event=True,icon=ico,location=(self.settings.params['lx'], self.settings.params['ly']), size=(990, 930))
-        # 設定値の反映
-        self.window['tg_top'].expand(expand_x=True, expand_y=True)
-        self.window['tg_det'].expand(expand_x=True, expand_y=True)
-        self.window['table_kusa'].expand(expand_x=True, expand_y=True)
-        self.window['table_makimono'].expand(expand_x=True, expand_y=True)
-        self.window['table_udewa'].expand(expand_x=True, expand_y=True)
-        self.window['table_tubo'].expand(expand_x=True, expand_y=True)
-        self.window['table_okou'].expand(expand_x=True, expand_y=True)
-        self.window['table_tue'].expand(expand_x=True, expand_y=True)
-        self.window['table_buki'].expand(expand_x=True, expand_y=True)
-        self.window['table_tate'].expand(expand_x=True, expand_y=True)
-        #self.window['table_monster'].expand(expand_x=True, expand_y=True)
-        self.window['memo'].expand(expand_x=True, expand_y=True)
-        self.window['memo'].update(self.settings.params['memo'])
-        self.window['memo_const'].expand(expand_x=True, expand_y=True)
-        self.window['memo_const'].update(self.settings.params['memo_const'])
-        self.update_table()
-        self.mode = 'kusa'
-        #self.update_monster(1)
-        ### 印の反映
-        #for k in self.settings.params.keys():
-        #    if ('bin_' in k) or ('tin_' in k):
-        #        self.window[k].update(self.settings.params[k])
+        self._start_time = int(datetime.datetime.now().timestamp())
+        self.capture_count = 0
+        self.last_capture_time = None
+        self.capture_status = self.ui.main.waiting_capture
+        self.latest_screen = None
 
-    def mod_target(self, category, idx:int, val:bool):
-        target = []
-        if category == 'kusa':
-            self.itemlist.kusa[idx].get = val
-        elif category == 'makimono':
-            self.itemlist.makimono[idx].get = val
-        elif category == 'udewa':
-            self.itemlist.udewa[idx].get = val
-        elif category == 'tue':
-            self.itemlist.tue[idx].get = val
-        elif category == 'tubo':
-            self.itemlist.tubo[idx].get = val
-        elif category == 'okou':
-            self.itemlist.okou[idx].get = val
-        #elif category == 'buki':
-        #    self.itemlist.buki[idx].get = val
-        #elif category == 'tate':
-        #    self.itemlist.tate[idx].get = val
+        self.websocket_server = None
+        self.websocket_loop = None
+        self.websocket_thread = None
+        self.start_websocket_server()
 
-    def get_target(self, category):
-        target = []
-        if category == 'kusa':
-            target = self.itemlist.kusa
-        elif category == 'makimono':
-            target = self.itemlist.makimono
-        elif category == 'udewa':
-            target = self.itemlist.udewa
-        elif category == 'tue':
-            target = self.itemlist.tue
-        elif category == 'tubo':
-            target = self.itemlist.tubo
-        elif category == 'okou':
-            target = self.itemlist.okou
-        elif category == 'buki':
-            target = self.itemlist.buki
-        elif category == 'tate':
-            target = self.itemlist.tate
-        return target
+        self.init_ui()
+        self.init_identification_ui()
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
-    def update_table(self):
-        #for k in ['kusa', 'makimono', 'udewa', 'tubo', 'tue', 'buki', 'tate']:
-        for k in ['kusa', 'makimono', 'udewa', 'tubo', 'okou', 'tue', 'buki', 'tate']:
-            data=[]
-            target = self.get_target(k)
-            row_colors = []
-            pre_buy = target[0].buy
-            is_odd = False
-            for i,item in enumerate(target):
-                capacity = ''
-                fontcolor = 'black'
-                buy = f"{item.buy:,}"
-                sell = f"{item.sell:,}"
-                if k in ['tue','tubo','okou']:
-                    if item.capa_min == item.capa_max:
-                        capacity = item.capa_max
-                    else:
-                        capacity = f"{item.capa_min}-{item.capa_max}"
-                    buy = f"{item.buy:,} - {item.buy_max:,}"
-                    sell = f"{item.sell:,} - {item.sell_max:,}"
-                data.append([item.name, capacity, buy, sell, item.bin, item.tin, item.memo])
-                if item.buy != pre_buy:
-                    pre_buy = item.buy
-                    is_odd = not is_odd
-                if is_odd:
-                    bgcolor = '#ffffb0'
-                else:
-                    bgcolor = '#b0ffff'
-                if item.get:
-                    bgcolor = '#666666'
+        self.obs_manager.connect()
+        QTimer.singleShot(1000, self.check_obs_configuration)
+        self.execute_obs_triggers("app_start")
+
+        self.main_timer = QTimer()
+        self.main_timer.timeout.connect(self.main_loop)
+        self.main_timer.start(250)
+
+        self.display_timer = QTimer()
+        self.display_timer.timeout.connect(self.update_display)
+        self.display_timer.start(500)
+
+        self.setup_global_hotkeys()
+        logger.info("アプリケーション起動完了")
+
+    @property
+    def start_time(self) -> int:
+        return self._start_time
+
+    def start_websocket_server(self):
+        """画面取得状態を外部へ配信するWebSocketサーバーを開始"""
+        self.websocket_server = DataWebSocketServer(self.config.websocket_data_port)
+        self.websocket_loop = asyncio.new_event_loop()
+
+        def run_loop():
+            asyncio.set_event_loop(self.websocket_loop)
+            self.websocket_server.start(self.websocket_loop)
+            self.websocket_loop.run_forever()
+
+        self.websocket_thread = threading.Thread(target=run_loop, daemon=True, name="DataWebSocketThread")
+        self.websocket_thread.start()
+
+    def stop_websocket_server(self):
+        if self.websocket_server:
+            self.websocket_server.stop()
+        if self.websocket_loop:
+            self.websocket_loop.call_soon_threadsafe(self.websocket_loop.stop)
+        if self.websocket_thread:
+            self.websocket_thread.join(timeout=2.0)
+
+    def check_obs_configuration(self):
+        status = self.obs_manager.get_detailed_status()
+        warnings = []
+
+        if not status["is_connected"]:
+            warnings.append("・OBS WebSocketに接続できていません")
+        if not status["is_source_configured"]:
+            warnings.append("・監視対象ソースが設定されていません")
+
+        if warnings:
+            warning_message = "OBS設定に問題があります:\n\n" + "\n".join(warnings)
+            warning_message += "\n\nOBSが起動していること及び、本アプリの設定を確認してください。"
+            warning_message += "\n(メニュー: ファイル → OBS制御設定)"
+
+            msg_box = QMessageBox(self)
+            msg_box.setIcon(QMessageBox.Warning)
+            msg_box.setWindowTitle("OBS設定の警告")
+            msg_box.setText(warning_message)
+            msg_box.setStandardButtons(QMessageBox.Ok)
+            msg_box.exec()
+
+            logger.warning(f"OBS configuration warning: {warnings}")
+
+    def open_config_dialog(self):
+        dialog = ConfigDialog(self.config, self)
+        if dialog.exec():
+            self.update_all_configs()
+            logger.info("設定を更新しました")
+            self.statusBar().showMessage("設定を更新しました", 3000)
+
+    def open_obs_dialog(self):
+        dialog = OBSControlDialog(self.config, self.obs_manager, self)
+        if dialog.exec():
+            self.update_all_configs()
+            logger.info("OBS制御設定を更新しました")
+            self.statusBar().showMessage("OBS制御設定を更新しました", 3000)
+
+    def update_all_configs(self):
+        old_port = self.config.websocket_data_port
+        self.config.load_config()
+        self.obs_manager.set_config(self.config)
+
+        self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
+        self.show()
+
+        if old_port != self.config.websocket_data_port:
+            self.stop_websocket_server()
+            self.start_websocket_server()
+
+        if not self.obs_manager.is_connected:
+            self.obs_manager.connect()
+
+    def show_about(self):
+        QMessageBox.about(
+            self,
+            self.ui.window.about_title,
+            f"Siren 6 Helper {SWVER}\n\nauthor: dj-kata",
+        )
+
+    def init_identification_ui(self):
+        self.memo_edit.setPlainText(self.siren_settings.params.get("memo", ""))
+        self.memo_const_edit.setPlainText(self.siren_settings.params.get("memo_const", ""))
+        self.mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
+        self.mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
+        self.reset_button.clicked.connect(self.reset_identification)
+        self.update_item_tables()
+
+    def get_target_items(self, category):
+        return getattr(self.itemlist, category)
+
+    def set_selected_items_identified(self, identified: bool):
+        category = ITEM_CATEGORIES[self.identify_tabs.currentIndex()]
+        if category in ("buki", "tate"):
+            self.statusBar().showMessage("武器・盾は識別状態の変更対象外です", 3000)
+            return
+
+        table = self.item_tables[category]
+        selected_rows = sorted({index.row() for index in table.selectionModel().selectedRows()})
+        if not selected_rows:
+            self.statusBar().showMessage("変更する行を選択してください", 3000)
+            return
+
+        target = self.get_target_items(category)
+        for row in selected_rows:
+            if 0 <= row < len(target):
+                target[row].get = identified
+
+        self.update_item_tables()
+        self.statusBar().showMessage("識別状態を更新しました", 3000)
+
+    def reset_identification(self):
+        self.itemlist.reset()
+        self.memo_edit.clear()
+        self.update_item_tables()
+        self.statusBar().showMessage("リセットしました", 3000)
+
+    def update_item_tables(self):
+        for category in ITEM_CATEGORIES:
+            self.update_item_table(category)
+
+        counts = self.get_item_stats()
+        for category, (count, total) in counts.items():
+            self.item_count_labels[category].setText(f"{count}/{total}")
+
+        self.write_stat_xml(counts)
+
+    def update_item_table(self, category):
+        table = self.item_tables[category]
+        target = self.get_target_items(category)
+        table.setRowCount(len(target))
+
+        previous_buy = target[0].buy if target else None
+        is_odd_price_group = False
+
+        for row, item in enumerate(target):
+            capacity = ""
+            buy = f"{item.buy:,}"
+            sell = f"{item.sell:,}"
+            if category in ("tue", "tubo", "okou"):
+                capacity = str(item.capa_max) if item.capa_min == item.capa_max else f"{item.capa_min}-{item.capa_max}"
+                buy = f"{item.buy:,} - {item.buy_max:,}"
+                sell = f"{item.sell:,} - {item.sell_max:,}"
+
+            values = [item.name, capacity, buy, sell, item.bin, item.tin, item.memo]
+
+            if item.buy != previous_buy:
+                previous_buy = item.buy
+                is_odd_price_group = not is_odd_price_group
+
+            background = QColor("#ffffb0" if is_odd_price_group else "#b0ffff")
+            if item.get or item.default_get:
+                background = QColor("#666666")
+            foreground = QColor("#888888" if item.demerit else "#000000")
+
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(str(value))
+                cell.setBackground(QBrush(background))
+                cell.setForeground(QBrush(foreground))
+                table.setItem(row, column, cell)
+
+        table.resizeRowsToContents()
+
+    def get_item_stats(self):
+        counts = {}
+        for category in STAT_CATEGORIES:
+            total = 0
+            count = 0
+            for item in self.get_target_items(category):
                 if item.default_get:
-                    bgcolor = '#666666'
-                if item.demerit: # 完全なデメリットアイテムは文字を灰色に
-                    fontcolor='#888888'
-                row_colors.append((i, fontcolor, bgcolor))
-            self.window[f'table_{k}'].update(data)
-            self.window[f'table_{k}'].update(row_colors=row_colors)
+                    continue
+                total += 1
+                if item.get:
+                    count += 1
+            counts[category] = (count, total)
+        return counts
 
-        # 統計情報の取得
-        self.write_stat_xml()
-        cnt,total = self.itemlist.get_stat()
-        #for i,name in enumerate(['kusa', 'makimono', 'udewa', 'tubo', 'tue', '100kusa','300kusa', '500kusa']):
-        for i,name in enumerate(['kusa', 'makimono', 'udewa', 'tubo', 'tue']):
-            self.window[f'cnt_{name}'].update(f"{cnt[i]}/{total[i]}")
+    def write_stat_xml(self, counts):
+        with open("stat.xml", "w", encoding="utf-8") as f:
+            f.write('<?xml version="1.0" encoding="utf-8"?>\n')
+            f.write("<Items>\n")
+            for category in STAT_CATEGORIES:
+                count, total = counts[category]
+                f.write(f"<{category}>{count}/{total}</{category}>\n")
+            f.write("</Items>\n")
 
-    def update_info(self, msg):
-        self.window['txt_info'].update(msg)
+    def save_identification_settings(self):
+        self.itemlist.save(self.siren_settings.params)
+        self.siren_settings.params["memo"] = self.memo_edit.toPlainText()
+        self.siren_settings.params["memo_const"] = self.memo_const_edit.toPlainText()
+        self.siren_settings.save_settings()
 
-    # モンスター表を更新する。st:この階層以降を表示
-    def update_monster(self, st):
-        a = MonsterList()
-        dat = []
-        row_colors = []
-        for i,monsters in enumerate(a.dat):
-            if i+1 >= st:
-                line = [f"{i+1}F"]
-                for j in range(9):
-                    if j < len(monsters):
-                        line.append(monsters[j])
-                    else:
-                        line.append('')
-                dat.append(line)
-                if i+1 in (29,30,47,48,49,56,57,58,66,67,68,77,78,93,94,95,96,97,98,99): # ドラゴン、戦車、ラビ
-                    row_colors.append([i-st+1, '#000000', '#ff88ff'])
-                elif i+1 in (3,4,5,36,37,38,61,62,72,73): # 草稼ぎ、復活稼ぎ
-                    row_colors.append([i-st+1, '#000000', '#aaffaa'])
-                elif i+1 in (6,7,22,23,44,45,85,86,87,88): # にぎり
-                    row_colors.append([i-st+1, '#000000', '#aaaaff'])
-                elif i+1 in (10,25,50,75): # 店
-                    row_colors.append([i-st+1, '#000000', '#ffffaa'])
-                elif i+1 in (8,9,31,32,33,50,51,70,71): # マゼルン
-                    row_colors.append([i-st+1, '#000000', '#aaffff'])
-                elif i+1 in (14,): # デビル稼ぎ
-                    row_colors.append([i-st+1, '#000000', '#ffaaff'])
-                else:
-                    if i % 2 == 0:
-                        row_colors.append([i-st+1, '#000000', '#FFFFFF'])
-                    else:
-                        row_colors.append([i-st+1, '#000000', '#bbbbbb'])
+    def save_image(self):
+        """現在取得しているゲーム画面を保存する"""
+        try:
+            if self.latest_screen is None:
+                self.statusBar().showMessage("保存できる画面がまだありません", 3000)
+                return False
 
-        self.window['table_monster'].update(dat, row_colors=row_colors)
+            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = escape_for_filename(f"siren6_capture_{date}.png")
+            os.makedirs(self.config.image_save_path, exist_ok=True)
+            full_path = Path(self.config.image_save_path) / filename
+            self.latest_screen.save(full_path)
+            self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
+            return True
+        except Exception as e:
+            logger.error(f"画像保存エラー: {traceback.format_exc()}")
+            self.statusBar().showMessage(f"画像保存エラー: {str(e)}", 3000)
+            return False
 
-    def write_stat_xml(self):
-        cnt,total = self.itemlist.get_stat()
+    def on_obs_connection_changed(self, is_connected: bool, message: str):
+        self.obs_status_label.setText(message)
+        self.obs_status_label.setStyleSheet(
+            "color: green; font-weight: bold;" if is_connected else "color: red; font-weight: bold;"
+        )
+        if is_connected:
+            logger.info("OBS接続が確立されました")
 
-        with codecs.open('stat.xml', 'w', 'utf-8') as w:
-            w.write('<?xml version="1.0" encoding="utf-8"?>\n')
-            w.write('<Items>\n')
-            #for i,name in enumerate(['kusa', 'makimono', 'udewa', 'tubo', 'tue', 'kusa1','kusa3', 'kusa5']):
-            for i,name in enumerate(['kusa', 'makimono', 'udewa', 'tubo', 'okou', 'tue']):
-                out = f"{cnt[i]}/{total[i]}"
-                w.write(f"<{name}>{out}</{name}>\n")
-            w.write('</Items>\n')
+    def main_loop(self):
+        """OBSから監視対象ソースを定期取得する"""
+        try:
+            if not self.obs_manager.is_connected or not self.config.monitor_source_name:
+                self.capture_status = self.ui.main.waiting_capture
+                return
 
-    def write_yin_xml(self, val):
-        out_bukiin = ''
-        out_tatein = ''
-        out_bukiin_short = ''
-        out_tatein_short = ''
-        for k in bukiin.keys():
-            if val[f'bin_{k}']:
-                out_bukiin += f"{bukiin[k]}, "
-                out_bukiin_short += f"{bukiin[k][:2]},"
-        for k in tatein.keys():
-            if val[f'tin_{k}']:
-                out_tatein += f"{tatein[k]}, "
-                out_tatein_short += f"{tatein[k][:2]},"
+            self.obs_manager.screenshot()
+            if self.obs_manager.screen is None:
+                self.capture_status = self.ui.main.capture_failed
+                return
 
-        with codecs.open('soubi.xml', 'w', 'utf-8') as w:
-            w.write('<?xml version="1.0" encoding="utf-8"?>\n')
-            w.write('<Items>\n')
-            w.write(f'<bukiin>{out_bukiin}</bukiin>\n')
-            w.write(f'<tatein>{out_tatein}</tatein>\n')
-            w.write(f'<bukiin_short>{out_bukiin_short}</bukiin_short>\n')
-            w.write(f'<tatein_short>{out_tatein_short}</tatein_short>\n')
-            w.write('</Items>\n')
+            self.latest_screen = self.obs_manager.screen
+            self.capture_count += 1
+            self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.capture_status = self.ui.main.capture_ok
+            self.broadcast_capture_state()
+        except Exception:
+            logger.error(f"メインループエラー: {traceback.format_exc()}")
 
-    def main(self):
-        self.gui_main()
-        while 1:
-            ev, val = self.window.read()
-            for v in val.keys():
-                if 'tg_' in v:
-                    print(f"val[{v}]:{val[v]}")
-            print(f"ev={ev}")
-            # アプリ終了時に実行
-            if ev in (sg.WIN_CLOSED, '-WINDOW CLOSE ATTEMPTED-', 'btn_close', 'Escape:27'): # 終了処理
-                self.settings.params['lx'] = self.window.current_location()[0]
-                self.settings.params['ly'] = self.window.current_location()[1]
-                self.settings.params['lw'] = self.window.current_size_accurate()[0]
-                self.settings.params['lh'] = self.window.current_size_accurate()[1]
-                self.window.close()
-                self.itemlist.save(self.settings.params)
-                self.settings.params['memo'] = val['memo']
-                self.settings.params['memo_const'] = val['memo_const']
-                ### 印の反映
-                #for k in self.settings.params.keys():
-                #    if ('bin_' in k) or ('tin_' in k):
-                #        self.settings.params[k] = val[k]
-                # ファイルに保存
-                self.settings.save_settings()
-                break
-            elif ev == 'btn_get':
-                if (not '武器' in val['tg_det']) and (not '盾' in val['tg_det']): 
-                    mode = self.conv_tabname[val['tg_det']]
-                    for i in val[f'table_{mode}']:
-                        self.mode = mode
-                        self.mod_target(self.mode, i, True)
-                    self.update_table()
-                    self.update_info('')
-            elif ev == 'btn_lost':
-                if (not '武器' in val['tg_det']) and (not '盾' in val['tg_det']): 
-                    mode = self.conv_tabname[val['tg_det']]
-                    for i in val[f'table_{mode}']:
-                        self.mode = mode
-                        self.mod_target(self.mode, i, False)
-                    self.update_table()
-                    self.update_info('')
-            #elif (ev.startswith('bin_')) or (ev.startswith('tin_')):
-            #    self.write_yin_xml(val)
-            elif ev == 'floor':
-                self.update_monster(int(val['floor']))
-            elif ev == 'btn_reset':
-                self.itemlist.reset()
-                self.window['memo'].update('')
-                pre_mode = self.mode
-                self.update_table()
-                self.mode = pre_mode
-                for k in val.keys():
-                    if ('bin_' in k) or ('tin_' in k):
-                        self.window[k].update(False)
-                val_false = val
-                for k in val.keys():
-                    val_false[k] = False
-                #self.write_yin_xml(val_false)
-                self.update_info('リセットしました。')
+    def broadcast_capture_state(self):
+        if not self.websocket_server:
+            return
+        self.websocket_server.update_capture_data(
+            {
+                "capture_count": self.capture_count,
+                "last_capture_time": self.last_capture_time,
+                "status": self.capture_status,
+                "monitor_source_name": self.config.monitor_source_name,
+            }
+        )
 
-if __name__ == '__main__':
-    a = GUI()
-    a.main()
+    def execute_obs_triggers(self, trigger: str):
+        """指定されたトリガーのOBS制御を実行"""
+        try:
+            from src.obs_control import OBSControlData
+
+            control_data = OBSControlData()
+            control_data.set_config(self.config)
+            settings = control_data.get_settings_by_trigger(trigger)
+            if not settings or not self.obs_manager.is_connected:
+                return
+
+            for setting in settings:
+                try:
+                    action = setting["action"]
+
+                    if action == "switch_scene":
+                        target_scene = setting.get("scene")
+                        if target_scene:
+                            self.obs_manager.change_scene(target_scene)
+
+                    elif action in ("show_source", "hide_source"):
+                        scene_name = setting.get("scene")
+                        source_name = setting.get("source")
+                        if scene_name and source_name:
+                            mod_scene_name, scene_item_id = self.obs_manager.search_itemid(scene_name, source_name)
+                            if scene_item_id:
+                                if action == "show_source":
+                                    self.obs_manager.enable_source(mod_scene_name, scene_item_id)
+                                else:
+                                    self.obs_manager.disable_source(mod_scene_name, scene_item_id)
+
+                    elif action == "autosave_source":
+                        scene_name = setting.get("scene")
+                        source_name = setting.get("source")
+                        if scene_name and source_name:
+                            _, scene_item_id = self.obs_manager.search_itemid(scene_name, source_name)
+                            if scene_item_id:
+                                filename = os.path.splitext(source_name)[0]
+                                filename += f"_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.png"
+                                dst = Path(self.config.image_save_path).resolve() / filename
+                                self.obs_manager.save_screenshot_dst(source_name, str(dst), disable_wh=True)
+                except Exception as e:
+                    logger.error(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
+        except Exception as e:
+            logger.error(traceback.format_exc())
+            logger.error(f"トリガー実行エラー ({trigger}): {e}")
+
+    def closeEvent(self, event):
+        self.execute_obs_triggers("app_end")
+        self.remove_global_hotkeys()
+        self.obs_manager.disconnect()
+        self.save_identification_settings()
+        self.save_window_geometry()
+
+        self.main_timer.stop()
+        self.display_timer.stop()
+        self.stop_websocket_server()
+
+        logger.info("アプリケーション終了")
+        event.accept()
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+
+    window = MainWindow()
+    window.setWindowIcon(QIcon("src/icon.ico"))
+    window.show()
+
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    updater = GitHubUpdater(
+        github_author="dj-kata",
+        github_repo="siren5_helper",
+        zipfile_basename="siren6_helper",
+        current_version=SWVER,
+        main_exe_name="siren6_helper.exe",
+        updator_exe_name="siren6_helper.exe",
+    )
+    updater.check_and_update()
+    main()

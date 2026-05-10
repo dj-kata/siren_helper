@@ -1,0 +1,18 @@
+[project]
+name = "pkch-helper"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "keyboard>=0.13.5",
+    "onnxocr>=2025.5",
+    "opencv-python>=4.11.0.86",
+    "obsws-python>=1.7.2",
+    "pillow>=10.0.0",
+    "pyside6>=6.7.0",
+    "websockets>=11.0",
+    "imagehash>=4.3.2",
+    "requests>=2.33.1",
+    "bs4>=0.0.2",
+]
