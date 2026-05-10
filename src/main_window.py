@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -136,24 +137,26 @@ class MainWindowUI(QMainWindow):
             ("buki", "武器(Lv1)"),
             ("tate", "盾(Lv1)"),
         ]
-        headers = ["名前", "容量", "買値", "売値", "武器印", "盾印", "メモ"]
-
         for key, label in table_specs:
+            headers = self.itemlist.get_table_headers(key)
             table = QTableWidget(0, len(headers))
             table.setHorizontalHeaderLabels(headers)
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
             table.setSelectionMode(QAbstractItemView.ExtendedSelection)
             table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            table.setWordWrap(False)
             table.verticalHeader().setVisible(False)
+            table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
             table.horizontalHeader().setStretchLastSection(True)
             table.setAlternatingRowColors(False)
             table.setSortingEnabled(False)
-            table.setColumnWidth(0, 170)
-            table.setColumnWidth(1, 60)
-            table.setColumnWidth(2, 110)
-            table.setColumnWidth(3, 110)
-            table.setColumnWidth(4, 90)
-            table.setColumnWidth(5, 90)
+            for column, header in enumerate(headers):
+                width = 220 if header == "簡単な説明" else 90
+                if header == "名前":
+                    width = 170
+                elif header in ("+1", "下限", "上限", "Lv", "基礎値", "印数"):
+                    width = 60
+                table.setColumnWidth(column, width)
             self.item_tables[key] = table
             self.identify_tabs.addTab(table, label)
 

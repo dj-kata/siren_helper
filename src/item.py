@@ -19,7 +19,7 @@ class item_category(Enum):
 
 class Item:
     def __init__(self, name, category:item_category, buy:str, sell:str, bin:str, tin:str, demerit:bool=False, 
-                normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False):
+                normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False, raw_data=None):
         self.name = name
         self.category = category
         self.buy = int(buy)
@@ -33,6 +33,7 @@ class Item:
         self.normal_shop = normal_shop
         self.vip_shop    = vip_shop
         self.memo = memo
+        self.raw_data = raw_data or {}
 
     def disp(self):
         str_demerit = ''
@@ -42,8 +43,8 @@ class Item:
 
 class Tue(Item):
     def __init__(self, name, buy:str, sell:str, buy_unit:str, sell_unit:str, capa_min:str, capa_max:str, bin:str, tin:str,
-                 demerit:bool=False, normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False):
-        super().__init__(name, item_category.tue, buy, sell, bin, tin, demerit, normal_shop, vip_shop, memo, default_get)
+                 demerit:bool=False, normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False, raw_data=None):
+        super().__init__(name, item_category.tue, buy, sell, bin, tin, demerit, normal_shop, vip_shop, memo, default_get, raw_data)
         self.buy_unit  = int(buy_unit)
         self.sell_unit = int(sell_unit)
         self.capa_min  = int(capa_min)
@@ -59,8 +60,8 @@ class Tue(Item):
 
 class Tubo(Item):
     def __init__(self, name, buy:str, sell:str, buy_unit:str, sell_unit:str, capa_min:str, capa_max:str, bin:str, tin:str,
-                 demerit:bool=False, normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False):
-        super().__init__(name, item_category.tubo, buy, sell, bin, tin, demerit, normal_shop, vip_shop, memo, default_get)
+                 demerit:bool=False, normal_shop:bool=False, vip_shop:bool=False, memo:str='', default_get:bool=False, raw_data=None):
+        super().__init__(name, item_category.tubo, buy, sell, bin, tin, demerit, normal_shop, vip_shop, memo, default_get, raw_data)
         self.buy_unit  = int(buy_unit)
         self.sell_unit = int(sell_unit)
         self.capa_min  = int(capa_min)
@@ -90,6 +91,9 @@ class ItemList:
     def __init__(self, data_path=None):
         self.data_path = Path(data_path) if data_path else self.data_path
         data = self._load_json()
+        self.table_headers = {}
+        self.table_keys = {}
+        self._load_table_metadata(data)
 
         self.kusa = self._load_simple_items(data, "kusa", item_category.kusa, synthesis_key="異種合成")
         self.makimono = self._load_simple_items(data, "makimono", item_category.makimono, synthesis_key="異種")
@@ -106,6 +110,26 @@ class ItemList:
 
     def _json_items(self, data, category):
         return data[self.category_json_keys[category]]["items"]
+
+    def _load_table_metadata(self, data):
+        for category, json_key in self.category_json_keys.items():
+            headers = data[json_key].get("columns", [])
+            self.table_headers[category] = headers
+            self.table_keys[category] = self._make_unique_headers(headers)
+
+    def _make_unique_headers(self, headers):
+        counts = {}
+        unique_headers = []
+        for header in headers:
+            counts[header] = counts.get(header, 0) + 1
+            unique_headers.append(header if counts[header] == 1 else f"{header}_{counts[header]}")
+        return unique_headers
+
+    def get_table_headers(self, category):
+        return self.table_headers.get(category, [])
+
+    def get_table_values(self, category, item):
+        return [item.raw_data.get(key, "") for key in self.table_keys.get(category, [])]
 
     def _first_int(self, value, default=0):
         if isinstance(value, int):
@@ -131,8 +155,9 @@ class ItemList:
                 bin_value,
                 tin_value,
                 memo=row.get("簡単な説明", ""),
+                raw_data=row,
             ))
-        return items
+        return self._sort_by_buy(items)
 
     def _load_equipment_items(self, data, category, enum_value):
         items = []
@@ -145,8 +170,9 @@ class ItemList:
                 row.get("印", ""),
                 "",
                 memo=row.get("共鳴", "") or row.get("簡単な説明", ""),
+                raw_data=row,
             ))
-        return items
+        return self._sort_by_buy(items)
 
     def _load_capacity_items(self, data, category, enum_value, synthesis_key=None, extra_key=None):
         items = []
@@ -165,8 +191,12 @@ class ItemList:
                 bin_value,
                 tin_value,
                 memo=row.get("簡単な説明", ""),
+                raw_data=row,
             ))
-        return items
+        return self._sort_by_buy(items)
+
+    def _sort_by_buy(self, items):
+        return sorted(items, key=lambda item: (item.buy, item.name))
 
     def load(self, params):
         """ユーザデータのjsonからチェック済みの状態を読み込む

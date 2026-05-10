@@ -212,6 +212,8 @@ class MainWindow(MainWindowUI):
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
         self.apply_main_font()
+        if self.item_tables:
+            self.update_item_tables()
         self.show()
 
         if old_port != self.config.websocket_data_port:
@@ -284,20 +286,15 @@ class MainWindow(MainWindowUI):
         table = self.item_tables[category]
         target = self.get_target_items(category)
         table.setRowCount(len(target))
+        row_height = table.fontMetrics().height() + 6
+        table.verticalHeader().setDefaultSectionSize(row_height)
 
         previous_buy = target[0].buy if target else None
         is_odd_price_group = False
 
         for row, item in enumerate(target):
-            capacity = ""
-            buy = f"{item.buy:,}"
-            sell = f"{item.sell:,}"
-            if category in ("tue", "tubo", "okou"):
-                capacity = str(item.capa_max) if item.capa_min == item.capa_max else f"{item.capa_min}-{item.capa_max}"
-                buy = f"{item.buy:,} - {item.buy_max:,}"
-                sell = f"{item.sell:,} - {item.sell_max:,}"
-
-            values = [item.name, capacity, buy, sell, item.bin, item.tin, item.memo]
+            values = self.itemlist.get_table_values(category, item)
+            values = [self.to_single_line(value) for value in values]
 
             if item.buy != previous_buy:
                 previous_buy = item.buy
@@ -313,8 +310,10 @@ class MainWindow(MainWindowUI):
                 cell.setBackground(QBrush(background))
                 cell.setForeground(QBrush(foreground))
                 table.setItem(row, column, cell)
+            table.setRowHeight(row, row_height)
 
-        table.resizeRowsToContents()
+    def to_single_line(self, value):
+        return " ".join(str(value).replace("\r", " ").replace("\n", " ").split())
 
     def get_item_stats(self):
         counts = {}
