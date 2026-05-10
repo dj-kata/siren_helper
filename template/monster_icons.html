@@ -17,6 +17,7 @@
   --dekkai: #ffcf66;
   --maze: #9cf08b;
   --icon-size: 54px;
+  --floor-label-width: 64px;
 }
 
 * {
@@ -94,6 +95,7 @@ body {
 .floor-block {
   display: grid;
   gap: 4px;
+  width: 100%;
 }
 
 .floor-label {
@@ -220,6 +222,23 @@ body:not(.details) .groups {
 }
 
 body:not(.details) .floor-block {
+  display: grid;
+  grid-template-columns: var(--floor-label-width) 1fr;
+  gap: 4px;
+  align-items: start;
+}
+
+body:not(.details):not(.show-next) .floor-block {
+  grid-template-columns: 1fr;
+}
+
+body:not(.details) .floor-label {
+  width: var(--floor-label-width);
+  padding-right: 4px;
+  text-align: right;
+}
+
+body:not(.details) .floor-icons {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -319,10 +338,16 @@ body.details.show-next .floor-block {
   gap: 8px;
 }
 
+body.details .floor-icons {
+  display: grid;
+  gap: 10px;
+}
+
 body.details .group {
   display: grid;
   grid-template-columns: 112px 1fr;
   gap: 10px;
+  min-width: 0;
 }
 
 body.details .group-label {
@@ -336,6 +361,7 @@ body.details .group-label {
 body.details .monster-grid {
   gap: 8px;
   justify-content: flex-start;
+  min-width: 0;
 }
 
 body.details .monster {
@@ -394,6 +420,8 @@ const visibility = document.getElementById("visibility");
 const groups = document.getElementById("groups");
 
 let reconnectTimer = null;
+let latestData = null;
+let lastModeKey = "";
 
 function readCustomNumber(name) {
   const bodyValue = getComputedStyle(document.body).getPropertyValue(name).trim();
@@ -402,8 +430,15 @@ function readCustomNumber(name) {
 }
 
 function applyDisplayModes() {
-  document.body.classList.toggle("details", Number.parseFloat(readCustomNumber("--show-details")) > 0);
-  document.body.classList.toggle("show-next", Number.parseFloat(readCustomNumber("--show-next")) > 0);
+  const details = Number.parseFloat(readCustomNumber("--show-details")) > 0;
+  const showNext = Number.parseFloat(readCustomNumber("--show-next")) > 0;
+  const modeKey = `${details ? 1 : 0}:${showNext ? 1 : 0}`;
+  document.body.classList.toggle("details", details);
+  document.body.classList.toggle("show-next", showNext);
+  if (latestData && modeKey !== lastModeKey) {
+    renderData(latestData);
+  }
+  lastModeKey = modeKey;
 }
 
 function isDetailsMode() {
@@ -445,6 +480,11 @@ function connect() {
 }
 
 function render(data) {
+  latestData = data;
+  renderData(data);
+}
+
+function renderData(data) {
   title.textContent = `${data.dungeon_name || "--"} ${data.floor_label || ""}`;
   visibility.textContent = data.visibility ? `視界 ${data.visibility}` : "";
   groups.replaceChildren();
@@ -463,23 +503,27 @@ function createFloorBlock(data, isNext) {
   floorLabel.textContent = `${isNext ? "次 " : ""}${data.floor_label || ""}`;
   floorBlock.appendChild(floorLabel);
 
+  const floorIcons = document.createElement("div");
+  floorIcons.className = "floor-icons";
+  floorBlock.appendChild(floorIcons);
+
   const visibleGroups = (data.groups || []).filter((group) => (group.monsters || []).length > 0);
   if (visibleGroups.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty";
     empty.textContent = "出現なし";
-    floorBlock.appendChild(empty);
+    floorIcons.appendChild(empty);
     return floorBlock;
   }
 
   if (!isDetailsMode()) {
     for (const group of visibleGroups) {
       if (group.key === "dekkai") {
-        floorBlock.appendChild(createDekkaiCluster(group.monsters || []));
+        floorIcons.appendChild(createDekkaiCluster(group.monsters || []));
         continue;
       }
       for (const monster of group.monsters || []) {
-        floorBlock.appendChild(createMonster(monster, group.key));
+        floorIcons.appendChild(createMonster(monster, group.key));
       }
     }
     return floorBlock;
@@ -501,7 +545,7 @@ function createFloorBlock(data, isNext) {
       grid.appendChild(group.key === "dekkai" ? createDekkaiMonster(monster) : createMonster(monster, group.key));
     }
     section.appendChild(grid);
-    floorBlock.appendChild(section);
+    floorIcons.appendChild(section);
   }
   return floorBlock;
 }
@@ -580,6 +624,7 @@ window.addEventListener("load", applyDisplayModes);
 requestAnimationFrame(applyDisplayModes);
 setTimeout(applyDisplayModes, 250);
 setTimeout(applyDisplayModes, 1000);
+setInterval(applyDisplayModes, 500);
 connect();
 </script>
 </body>

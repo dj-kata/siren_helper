@@ -540,7 +540,9 @@ class MainWindow(MainWindowUI):
             "visibility": floor.get("visibility", "") if floor else "",
             "groups": groups,
             "monsters": [monster for group in groups for monster in group["monsters"]],
-            "next_floor": self.monster_floor_payload_part(next_floor, next_floor_number),
+            "next_floor": self.monster_floor_payload_part(next_floor, next_floor_number)
+            if next_floor
+            else None,
         }
 
     def monster_floor_groups(self, floor):
