@@ -13,7 +13,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QBrush, QColor, QIcon
+from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 
 try:
@@ -124,6 +124,7 @@ class MainWindow(MainWindowUI):
         self.start_websocket_server()
 
         self.init_ui()
+        self.apply_main_font()
         self.init_identification_ui()
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
@@ -210,6 +211,7 @@ class MainWindow(MainWindowUI):
         self.obs_manager.set_config(self.config)
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
+        self.apply_main_font()
         self.show()
 
         if old_port != self.config.websocket_data_port:
@@ -218,6 +220,11 @@ class MainWindow(MainWindowUI):
 
         if not self.obs_manager.is_connected:
             self.obs_manager.connect()
+
+    def apply_main_font(self):
+        font = QFont(self.font())
+        font.setPointSize(self.config.main_font_size)
+        self.setFont(font)
 
     def show_about(self):
         QMessageBox.about(

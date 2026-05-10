@@ -74,6 +74,7 @@ class UIText:
         autoload_offset = 'Auto-load offset:'
         websocket_port = 'Data display port:'
         keep_on_top = 'Always on Top'
+        main_font_size = 'Main window font size:'
     
     class music_pack:
         """Music pack settings tab"""

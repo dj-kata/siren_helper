@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPushButton,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -79,6 +80,11 @@ class ConfigDialog(QDialog):
         self.keep_on_top_check = QCheckBox(self.ui.feature.keep_on_top)
         form.addRow(self.keep_on_top_check)
 
+        self.main_font_size_spin = QSpinBox()
+        self.main_font_size_spin.setRange(8, 24)
+        self.main_font_size_spin.setSuffix(" pt")
+        form.addRow(self.ui.feature.main_font_size, self.main_font_size_spin)
+
         layout.addWidget(general_group)
         layout.addStretch()
         return widget
@@ -98,6 +104,7 @@ class ConfigDialog(QDialog):
         self.image_save_path_edit.setText(self.config.image_save_path)
         self.websocket_data_port_edit.setText(str(self.config.websocket_data_port))
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
+        self.main_font_size_spin.setValue(self.config.main_font_size)
 
     def accept(self):
         self.config.image_save_path = self.image_save_path_edit.text().strip() or "captures"
@@ -109,6 +116,7 @@ class ConfigDialog(QDialog):
             logger.warning("ポート番号の変換に失敗しました。既存値を使用します")
 
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
+        self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()
         logger.info("設定を保存しました")
         super().accept()

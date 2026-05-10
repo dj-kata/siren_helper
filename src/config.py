@@ -7,6 +7,13 @@ from src.logger import get_logger
 logger = get_logger(__name__)
 
 
+def clamp_int(value, default, minimum, maximum):
+    try:
+        return min(max(int(value), minimum), maximum)
+    except (TypeError, ValueError):
+        return default
+
+
 class Config:
     """アプリ設定を管理するクラス"""
 
@@ -25,6 +32,7 @@ class Config:
         self.main_window_width = 500
         self.main_window_height = 300
         self.keep_on_top = False
+        self.main_font_size = 10
 
         # OBS自動制御
         self.obs_control_settings = []
@@ -57,6 +65,12 @@ class Config:
             self.websocket_password = config_data.get("websocket_password", self.websocket_password)
             self.keep_on_top = config_data.get("keep_on_top", self.keep_on_top)
             self.main_window_geometry = config_data.get("main_window_geometry", self.main_window_geometry)
+            self.main_font_size = clamp_int(
+                config_data.get("main_font_size", self.main_font_size),
+                self.main_font_size,
+                8,
+                24,
+            )
 
             window_config = config_data.get("window", {})
             self.main_window_x = window_config.get("x", self.main_window_x)
@@ -82,6 +96,7 @@ class Config:
             "websocket_password": self.websocket_password,
             "keep_on_top": self.keep_on_top,
             "main_window_geometry": self.main_window_geometry,
+            "main_font_size": self.main_font_size,
             "window": {
                 "x": self.main_window_x,
                 "y": self.main_window_y,
