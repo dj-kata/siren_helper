@@ -419,9 +419,22 @@ class OBSWebSocketManager(QObject):
     
     def screenshot(self):
         """OBSソースのキャプチャをself.screenに格納"""
-        import os
         from PIL import Image
-        
+
+        try:
+            response = self.get_screenshot(
+                self.config.monitor_source_name,
+                img_format='jpg',
+                quality=70,
+            )
+            if response is not None:
+                self.screen = response
+                return
+        except Exception:
+            logger.debug(f"In-memory screenshot failed: {traceback.format_exc()}")
+
+        import os
+
         os.makedirs('out', exist_ok=True)
         dst = os.path.abspath('out/capture.png')
         
@@ -434,6 +447,26 @@ class OBSWebSocketManager(QObject):
         except Exception as e:
             # logger.error(f"Screenshot failed: {e}")
             self.screen = None
+
+    @_require_connection
+    def get_screenshot(self, source: str, img_format: str = 'jpg', quality: int = 70):
+        """スクリーンショットをメモリ上で取得"""
+        import base64
+        from io import BytesIO
+        from PIL import Image
+
+        response = self.client.get_source_screenshot(
+            source,
+            img_format,
+            self.picw,
+            self.pich,
+            quality,
+        )
+        image_data = getattr(response, "image_data", "")
+        if "," in image_data:
+            image_data = image_data.split(",", 1)[1]
+        with Image.open(BytesIO(base64.b64decode(image_data))) as image:
+            return image.copy()
     
     @_require_connection
     def save_screenshot_dst(self, source: str, dst: str, disable_wh:bool=False) -> bool:

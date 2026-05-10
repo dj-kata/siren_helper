@@ -15,4 +15,5 @@ dependencies = [
     "imagehash>=4.3.2",
     "requests>=2.33.1",
     "bs4>=0.0.2",
+    "paddleocr>=3.5.0",
 ]

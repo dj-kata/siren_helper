@@ -11,6 +11,7 @@ import re
 import sys
 import threading
 import traceback
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, Qt
@@ -27,6 +28,7 @@ except ImportError:
 
 from src.config import Config
 from src.config_dialog import ConfigDialog
+from src.dungeon_ocr import DungeonOcrReader
 from src.funcs import escape_for_filename
 from src.item import ItemList
 from src.logger import get_logger
@@ -128,6 +130,11 @@ class MainWindow(MainWindowUI):
         self.last_capture_time = None
         self.capture_status = self.ui.main.waiting_capture
         self.latest_screen = None
+        self.last_capture_attempt_time = 0.0
+        self.capture_interval = 1.0
+        self.dungeon_ocr_reader = DungeonOcrReader()
+        self.last_dungeon_ocr_time = 0.0
+        self.dungeon_ocr_interval = 5.0
 
         self.websocket_server = None
         self.websocket_loop = None
@@ -762,18 +769,60 @@ class MainWindow(MainWindowUI):
                 self.capture_status = self.ui.main.waiting_capture
                 return
 
+            now = time.monotonic()
+            if now - self.last_capture_attempt_time < self.capture_interval:
+                return
+            self.last_capture_attempt_time = now
+
             self.obs_manager.screenshot()
             if self.obs_manager.screen is None:
                 self.capture_status = self.ui.main.capture_failed
                 return
 
             self.latest_screen = self.obs_manager.screen
+            self.update_dungeon_selection_from_screen(self.latest_screen)
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.capture_status = self.ui.main.capture_ok
             self.broadcast_capture_state()
         except Exception:
             logger.error(f"メインループエラー: {traceback.format_exc()}")
+
+    def update_dungeon_selection_from_screen(self, screen):
+        now = time.monotonic()
+        if now - self.last_dungeon_ocr_time < self.dungeon_ocr_interval:
+            return
+        self.last_dungeon_ocr_time = now
+
+        try:
+            result = self.dungeon_ocr_reader.read(screen, self.dungeons)
+            if not result:
+                return
+            self.apply_detected_dungeon_floor(result.dungeon_key, result.floor)
+        except Exception:
+            logger.error(f"ダンジョンOCRエラー: {traceback.format_exc()}")
+
+    def apply_detected_dungeon_floor(self, dungeon_key, floor):
+        dungeon_index = self.dungeon_combo.findData(dungeon_key) if self.dungeon_combo else -1
+        if dungeon_index < 0:
+            return
+
+        changed = False
+        if self.dungeon_combo.currentData() != dungeon_key:
+            self.dungeon_combo.setCurrentIndex(dungeon_index)
+            changed = True
+
+        floor_index = self.monster_floor_combo.findData(floor) if self.monster_floor_combo else -1
+        if floor_index < 0:
+            return
+
+        if self.monster_floor_combo.currentData() != floor:
+            self.monster_floor_combo.setCurrentIndex(floor_index)
+            changed = True
+
+        if changed:
+            dungeon_name = self.dungeon_combo.currentText()
+            self.statusBar().showMessage(f"OCRで更新しました: {dungeon_name} {floor}F", 3000)
 
     def broadcast_capture_state(self):
         if not self.websocket_server:
