@@ -7,6 +7,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 import sys
 import threading
 import traceback
@@ -47,6 +48,11 @@ except Exception:
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
 STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
 DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
+INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
+ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+MONSTER_ICON_NAME_ALIASES = {
+    "洞窟マムル": "どうくつマムル",
+}
 
 
 class UserSettings:
@@ -223,6 +229,7 @@ class MainWindow(MainWindowUI):
         if old_port != self.config.websocket_data_port:
             self.stop_websocket_server()
             self.start_websocket_server()
+            self.broadcast_monster_floor_state()
 
         if not self.obs_manager.is_connected:
             self.obs_manager.connect()
@@ -410,6 +417,120 @@ class MainWindow(MainWindowUI):
             column = self.fill_monster_cells(row, column, dekkai_slots, floor, "dekkai_cells", "dekkai_monsters")
             self.fill_monster_cells(row, column, maze_slots, floor, "maze_cells", "maze_monsters")
             self.monster_table.setRowHeight(row, row_height)
+
+        self.broadcast_monster_floor_state()
+
+    def selected_monster_floor(self):
+        dungeon = self.current_dungeon()
+        floors = dungeon.get("monster_floors", []) if dungeon else []
+        selected_floor = self.monster_floor_combo.currentData() if self.monster_floor_combo else 1
+        if not isinstance(selected_floor, int):
+            selected_floor = 1
+        for floor in floors:
+            if floor.get("floor") == selected_floor:
+                return floor
+        return None
+
+    def monster_group_entries(self, floor, cell_key, names_key, group):
+        cells = floor.get(cell_key) if floor else []
+        if not cells:
+            cells = [{"name": name} for name in floor.get(names_key, [])] if floor else []
+        entries = []
+        seen = set()
+        for cell in cells:
+            name = cell.get("name", "")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            entries.append({
+                "name": name,
+                "group": group,
+                "icon_sources": self.monster_icon_sources(name),
+                "background": cell.get("background", ""),
+                "foreground": cell.get("foreground", ""),
+            })
+        return entries
+
+    def safe_icon_filename(self, name):
+        filename = INVALID_ICON_FILENAME_CHARS.sub("_", str(name).replace("\xa0", " "))
+        return filename.strip(" .")
+
+    def monster_icon_sources(self, name):
+        filenames = []
+        for candidate in (name, MONSTER_ICON_NAME_ALIASES.get(name, "")):
+            filename = self.safe_icon_filename(candidate)
+            if filename and filename not in filenames:
+                filenames.append(filename)
+        if not filenames:
+            return []
+
+        icon_dir = Path("data/icons")
+        template_icon_dir = Path("../data/icons")
+        if icon_dir.exists():
+            existing = []
+            for filename in filenames:
+                existing.extend(
+                    path
+                    for path in icon_dir.glob(f"{filename}.*")
+                    if path.suffix.lower() in ICON_EXTENSIONS
+                )
+            if existing:
+                order = {extension: index for index, extension in enumerate(ICON_EXTENSIONS)}
+                existing.sort(key=lambda path: order.get(path.suffix.lower(), 999))
+                return [
+                    (template_icon_dir / path.name).as_posix()
+                    for path in existing
+                ] + [path.as_posix() for path in existing]
+
+        return [
+            path.as_posix()
+            for filename in filenames
+            for extension in ICON_EXTENSIONS
+            for path in (
+                template_icon_dir / f"{filename}{extension}",
+                icon_dir / f"{filename}{extension}",
+            )
+        ]
+
+    def current_monster_floor_payload(self):
+        dungeon = self.current_dungeon()
+        selected_floor = self.monster_floor_combo.currentData() if self.monster_floor_combo else 1
+        if not isinstance(selected_floor, int):
+            selected_floor = 1
+        floor = self.selected_monster_floor()
+
+        groups = [
+            {
+                "key": "normal",
+                "label": "出現モンスター",
+                "monsters": self.monster_group_entries(floor, "monster_cells", "monsters", "normal"),
+            },
+            {
+                "key": "dekkai",
+                "label": "デッ怪",
+                "monsters": self.monster_group_entries(floor, "dekkai_cells", "dekkai_monsters", "dekkai"),
+            },
+            {
+                "key": "maze",
+                "label": "マゼ種",
+                "monsters": self.monster_group_entries(floor, "maze_cells", "maze_monsters", "maze"),
+            },
+        ]
+
+        return {
+            "dungeon_key": dungeon.get("key", "") if dungeon else "",
+            "dungeon_name": dungeon.get("name", "") if dungeon else "",
+            "floor": selected_floor,
+            "floor_label": self.format_floor_label(selected_floor),
+            "visibility": floor.get("visibility", "") if floor else "",
+            "groups": groups,
+            "monsters": [monster for group in groups for monster in group["monsters"]],
+        }
+
+    def broadcast_monster_floor_state(self):
+        if not self.websocket_server:
+            return
+        self.websocket_server.update_monster_floor_data(self.current_monster_floor_payload())
 
     def format_floor_label(self, floor):
         return f"{floor}F" if isinstance(floor, int) else str(floor)

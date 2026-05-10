@@ -68,6 +68,14 @@ ITEM_AVAILABILITY_COLUMNS = {
     "雨": "rain",
 }
 TRUE_MARKS = {"○", "◯", "〇", "有", "あり", "黄", "灰", "黒"}
+NON_CIRCLE_MARK_DUNGEONS = {"toguro_shinzui", "chinmoku_shinzui"}
+ITEM_NAME_ALIASES = {
+    "四ツ又": "四ツ叉",
+    "四ッ又": "四ツ叉",
+    "場所替えの杖": "場所がえの杖",
+    "必中小刀": "必中の剣",
+    "水斬りの刀": "水斬りの剣",
+}
 
 
 def normalize_text(value: str) -> str:
@@ -80,6 +88,20 @@ def normalize_text(value: str) -> str:
 def cell_text(cell: Tag) -> str:
     text = normalize_text(cell.get_text("\n", strip=True))
     return "" if text == "-" else text
+
+
+def cell_style_value(cell: Tag, key: str) -> str:
+    style = cell.get("style", "")
+    match = re.search(rf"(?:^|;)\s*{re.escape(key)}\s*:\s*([^;]+)", style, flags=re.IGNORECASE)
+    return match.group(1).strip().lower() if match else ""
+
+
+def cell_info(cell: Tag) -> dict[str, str]:
+    return {
+        "text": cell_text(cell),
+        "background": cell_style_value(cell, "background-color"),
+        "foreground": cell_style_value(cell, "color"),
+    }
 
 
 def make_unique_headers(headers: list[str]) -> list[str]:
@@ -136,12 +158,60 @@ def expand_rows(table: Tag) -> list[list[str]]:
     return rows
 
 
+def expand_cell_rows(table: Tag) -> list[list[dict[str, str]]]:
+    rows = []
+    rowspans: dict[int, list[Any]] = {}
+
+    for row in table.select("tr"):
+        values = []
+        column_index = 0
+        for cell in row.find_all(["th", "td"], recursive=False):
+            while column_index in rowspans:
+                remaining, value = rowspans[column_index]
+                values.append(value)
+                if remaining <= 1:
+                    del rowspans[column_index]
+                else:
+                    rowspans[column_index] = [remaining - 1, value]
+                column_index += 1
+
+            value = cell_info(cell)
+            rowspan = int(cell.get("rowspan", 1))
+            colspan = int(cell.get("colspan", 1))
+            for offset in range(colspan):
+                values.append(value.copy())
+                if rowspan > 1:
+                    rowspans[column_index + offset] = [rowspan - 1, value.copy()]
+            column_index += colspan
+
+        while column_index in rowspans:
+            remaining, value = rowspans[column_index]
+            values.append(value)
+            if remaining <= 1:
+                del rowspans[column_index]
+            else:
+                rowspans[column_index] = [remaining - 1, value]
+            column_index += 1
+
+        if values:
+            rows.append(values)
+    return rows
+
+
 def parse_floor(value: str) -> int | str:
     return int(value) if re.fullmatch(r"\d+", value) else value
 
 
 def monster_name(value: str) -> str:
     return value.replace(" / ", "")
+
+
+def monster_cell(cell: dict[str, str]) -> dict[str, str]:
+    return {
+        "name": monster_name(cell.get("text", "")),
+        "background": cell.get("background", ""),
+        "foreground": cell.get("foreground", ""),
+    }
 
 
 def find_monster_table(soup: BeautifulSoup) -> Tag:
@@ -157,8 +227,8 @@ def find_monster_table(soup: BeautifulSoup) -> Tag:
 
 
 def parse_monster_table(table: Tag) -> dict[str, Any]:
-    rows = expand_rows(table)
-    headers = rows[0]
+    cell_rows = expand_cell_rows(table)
+    headers = [cell.get("text", "") for cell in cell_rows[0]]
     monster_indexes = [
         i
         for i, name in enumerate(headers)
@@ -169,33 +239,46 @@ def parse_monster_table(table: Tag) -> dict[str, Any]:
     visibility_indexes = [i for i, name in enumerate(headers) if name == "視界"]
 
     floors = []
-    for row in rows[1:]:
-        if not row or not row[0] or row[0] == "階":
+    for row in cell_rows[1:]:
+        row_text = [cell.get("text", "") for cell in row]
+        if not row_text or not row_text[0] or row_text[0] == "階":
             continue
-        monsters = [
-            monster_name(row[i])
+        monster_cells = [
+            monster_cell(row[i])
             for i in monster_indexes
-            if i < len(row) and row[i] and row[i] != "編集" and not row[i].isdigit()
+            if i < len(row_text)
+            and row_text[i]
+            and row_text[i] != "編集"
+            and not row_text[i].isdigit()
         ]
-        dekkai_monsters = [
-            monster_name(row[i])
+        dekkai_cells = [
+            monster_cell(row[i])
             for i in dekkai_indexes
-            if i < len(row) and row[i] and row[i] != "編集"
+            if i < len(row_text) and row_text[i] and row_text[i] != "編集"
         ]
-        maze_monsters = [
-            monster_name(row[i])
+        maze_cells = [
+            monster_cell(row[i])
             for i in maze_indexes
-            if i < len(row) and row[i] and row[i] != "編集"
+            if i < len(row_text) and row_text[i] and row_text[i] != "編集"
         ]
         floors.append({
-            "floor": parse_floor(row[0]),
-            "visibility": row[visibility_indexes[0]]
+            "floor": parse_floor(row_text[0]),
+            "visibility": row_text[visibility_indexes[0]]
+            if visibility_indexes and visibility_indexes[0] < len(row_text)
+            else "",
+            "visibility_background": row[visibility_indexes[0]].get("background", "")
             if visibility_indexes and visibility_indexes[0] < len(row)
             else "",
-            "monsters": monsters,
-            "dekkai": bool(dekkai_monsters),
-            "dekkai_monsters": dekkai_monsters,
-            "maze_monsters": maze_monsters,
+            "visibility_foreground": row[visibility_indexes[0]].get("foreground", "")
+            if visibility_indexes and visibility_indexes[0] < len(row)
+            else "",
+            "monsters": [cell["name"] for cell in monster_cells],
+            "monster_cells": monster_cells,
+            "dekkai": bool(dekkai_cells),
+            "dekkai_monsters": [cell["name"] for cell in dekkai_cells],
+            "dekkai_cells": dekkai_cells,
+            "maze_monsters": [cell["name"] for cell in maze_cells],
+            "maze_cells": maze_cells,
         })
 
     return {
@@ -219,9 +302,11 @@ def load_item_categories(path: Path) -> dict[str, str]:
     return categories
 
 
-def is_available(value: str) -> bool:
+def is_available(value: str, *, non_circle_marks_are_available: bool = False) -> bool:
     if not value:
         return False
+    if non_circle_marks_are_available:
+        return True
     parts = re.split(r"[/、,・\s]+", value)
     return any(part in TRUE_MARKS for part in parts)
 
@@ -275,6 +360,8 @@ def availability_from_methods(methods: str) -> tuple[dict[str, bool], dict[str, 
 def parse_item_tables(
     tables: list[Tag],
     item_categories: dict[str, str],
+    *,
+    non_circle_marks_are_available: bool,
 ) -> dict[str, Any]:
     items = []
     columns: list[str] = []
@@ -292,6 +379,8 @@ def parse_item_tables(
             name = values.get("名称", "")
             if not name or name == "アイテム名" or name == "名称":
                 continue
+            source_name = name
+            name = ITEM_NAME_ALIASES.get(source_name, source_name)
 
             category = item_categories.get(name, "")
             key = (name, category)
@@ -311,7 +400,10 @@ def parse_item_tables(
                     raw_value = values.get(header, "")
                     if raw_value:
                         raw_availability[json_key] = raw_value
-                        availability[json_key] = availability[json_key] or is_available(raw_value)
+                        availability[json_key] = availability[json_key] or is_available(
+                            raw_value,
+                            non_circle_marks_are_available=non_circle_marks_are_available,
+                        )
                 other = values.get("その他入手方法", "")
 
             other = "" if other == "他" else other
@@ -320,6 +412,7 @@ def parse_item_tables(
 
             items.append({
                 "name": name,
+                "source_name": source_name if source_name != name else "",
                 "category": category,
                 "source_format": source_format,
                 "available": availability,
@@ -348,7 +441,11 @@ def fetch_page(
     generated = soup.find("meta", attrs={"name": "generated"})
 
     monster_table = parse_monster_table(find_monster_table(soup))
-    item_tables = parse_item_tables(find_item_tables(soup), item_categories)
+    item_tables = parse_item_tables(
+        find_item_tables(soup),
+        item_categories,
+        non_circle_marks_are_available=dungeon.key in NON_CIRCLE_MARK_DUNGEONS,
+    )
     source_notes = []
     if not any(floor["monsters"] for floor in monster_table["floors"]):
         source_notes.append("monster table did not contain monster names in the source page")
