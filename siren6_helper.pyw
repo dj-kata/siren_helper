@@ -56,6 +56,7 @@ MIN_IDENTIFIED_ITEM_MATCH_SCORE = 0.82
 EQUIPMENT_PRICE_CORRECTION_MAX = 99
 EQUIPMENT_BUY_CORRECTION_UNIT = 100
 EQUIPMENT_SELL_CORRECTION_UNIT = 40
+SHOP_PRICE_HIDE_GRACE_SECONDS = 4.0
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
     "makimono": "巻物",
@@ -170,6 +171,8 @@ class MainWindow(MainWindowUI):
         self.last_shop_ocr_time = 0.0
         self.shop_ocr_interval = 1.5
         self.last_shop_result_signature = None
+        self.shop_price_visible = False
+        self.last_shop_price_visible_time = 0.0
         self.capture_worker = None
         self.capture_worker_running = False
         self.capture_worker_lock = threading.Lock()
@@ -875,6 +878,8 @@ class MainWindow(MainWindowUI):
             shop_result = result.get("shop_result")
             if shop_result:
                 self.handle_shop_ocr_result(shop_result)
+            else:
+                self.hide_shop_price_state_if_stale()
 
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -932,6 +937,8 @@ class MainWindow(MainWindowUI):
         result = self.read_shop_from_screen(screen)
         if result:
             self.handle_shop_ocr_result(result)
+        else:
+            self.hide_shop_price_state_if_stale()
 
     def read_shop_from_screen(self, screen):
         now = time.monotonic()
@@ -951,13 +958,9 @@ class MainWindow(MainWindowUI):
     def handle_shop_ocr_result(self, result):
         signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
         if signature == self.last_shop_result_signature:
-            logger.info(
-                "店OCR: 同一結果 item=%r kind=%s price=%s raw=%s",
-                result.item_text,
-                result.price_kind,
-                result.price,
-                result.raw_texts,
-            )
+            if self.shop_price_visible:
+                self.last_shop_price_visible_time = time.monotonic()
+            return
         self.last_shop_result_signature = signature
         logger.info(
             "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
@@ -1008,7 +1011,7 @@ class MainWindow(MainWindowUI):
                 item.name,
                 item.get,
             )
-            self.broadcast_shop_price_state(result, category, [(item, "", "")], exact_item=item)
+            self.hide_shop_price_state()
             item.get = True
             self.update_item_tables()
             self.select_items_in_table(category, [item])
@@ -1024,7 +1027,7 @@ class MainWindow(MainWindowUI):
                 result.price,
                 result.price_kind,
             )
-            self.broadcast_shop_price_state(result, None, [])
+            self.hide_shop_price_state()
             self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
             return
 
@@ -1198,10 +1201,16 @@ class MainWindow(MainWindowUI):
     def broadcast_shop_price_state(self, result, category, candidates, exact_item=None):
         if not self.websocket_server:
             return
+        if not candidates:
+            self.hide_shop_price_state()
+            return
 
         price_label = "買取価格" if result.price_kind == "sell" else "販売価格"
         category_label = ITEM_CATEGORY_LABELS.get(category, category or "判定不可")
+        self.shop_price_visible = True
+        self.last_shop_price_visible_time = time.monotonic()
         self.websocket_server.update_shop_price_data({
+            "visible": True,
             "item_text": result.item_text,
             "price": result.price,
             "price_kind": result.price_kind,
@@ -1211,6 +1220,24 @@ class MainWindow(MainWindowUI):
             "exact_item": exact_item.name if exact_item else "",
             "raw_texts": list(result.raw_texts),
             "candidates": [self.shop_candidate_payload(candidate) for candidate in candidates],
+            "updated_at": datetime.datetime.now().strftime("%H:%M:%S"),
+        })
+
+    def hide_shop_price_state_if_stale(self):
+        if not self.shop_price_visible:
+            return
+        if time.monotonic() - self.last_shop_price_visible_time < SHOP_PRICE_HIDE_GRACE_SECONDS:
+            return
+        self.hide_shop_price_state()
+
+    def hide_shop_price_state(self):
+        if not self.websocket_server or not self.shop_price_visible:
+            return
+        self.shop_price_visible = False
+        self.last_shop_result_signature = None
+        self.websocket_server.update_shop_price_data({
+            "visible": False,
+            "candidates": [],
             "updated_at": datetime.datetime.now().strftime("%H:%M:%S"),
         })
 

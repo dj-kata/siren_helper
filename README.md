@@ -1,6 +1,10 @@
-# siren5_helperについて
-風来のシレン5向けの識別支援ツールです。  
+# siren6_helperについて
+風来のシレン6向けの識別支援ツールです。  
 Windows(64bit)で動作します。
+
+## 注意
+Switch版(キャプボ経由)でもSteam版でも動きますが、Switch版だとアプリ起動中にOBSが重くなる問題があるようです。
+Steam版での利用を推奨します。
 
 # 中身
 - siren5_helper.exe: プログラム本体

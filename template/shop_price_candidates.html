@@ -6,7 +6,7 @@
 <title>Shop Price Candidates</title>
 <style>
 :root {
-  --bg: rgba(0, 0, 28, 0.78);
+  --bg: transparent;
   --line: rgba(255, 255, 255, 0.28);
   --text: #fff;
   --muted: rgba(255, 255, 255, 0.72);
@@ -30,6 +30,10 @@ body {
     -1px 1px 0 #000,
     1px -1px 0 #000,
     -1px -1px 0 #000;
+}
+
+body.hidden {
+  visibility: hidden;
 }
 
 .overlay {
@@ -161,7 +165,7 @@ body {
 }
 </style>
 </head>
-<body>
+<body class="hidden">
 <main class="overlay">
   <section class="header">
     <div class="title">
@@ -215,6 +219,7 @@ function connect() {
   socket.addEventListener("close", () => {
     statusDot.classList.remove("connected");
     statusText.textContent = "再接続待ち";
+    hide();
     reconnectTimer = setTimeout(connect, 1500);
   });
 
@@ -225,6 +230,12 @@ function connect() {
 
 function render(data) {
   const candidateList = data.candidates || [];
+  if (!data.visible || candidateList.length === 0) {
+    hide();
+    return;
+  }
+
+  document.body.classList.remove("hidden");
   const priceText = Number.isFinite(data.price) ? data.price.toLocaleString("ja-JP") : "--";
   item.textContent = data.item_text || "価格識別待ち";
   meta.textContent = `${data.category_label || "判定不可"} / ${data.price_label || "価格"} / ${data.updated_at || "--:--:--"}`;
@@ -232,14 +243,18 @@ function render(data) {
   candidates.replaceChildren();
   empty.textContent = "";
 
-  if (candidateList.length === 0) {
-    empty.textContent = "候補なし";
-    return;
-  }
-
   for (const candidate of candidateList) {
     candidates.appendChild(createCandidate(candidate, data.price_kind));
   }
+}
+
+function hide() {
+  document.body.classList.add("hidden");
+  item.textContent = "";
+  meta.textContent = "";
+  price.textContent = "";
+  candidates.replaceChildren();
+  empty.textContent = "";
 }
 
 function createCandidate(candidate, priceKind) {
