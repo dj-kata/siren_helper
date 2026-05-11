@@ -54,6 +54,7 @@ except Exception:
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
 STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
 SCREEN_HASH_SIZE = 16
+SCREEN_HASH_MAX_DISTANCE = 3
 MIN_IDENTIFIED_ITEM_MATCH_SCORE = 0.82
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
@@ -159,6 +160,7 @@ class MainWindow(MainWindowUI):
         self.capture_status = self.ui.main.waiting_capture
         self.latest_screen = None
         self.last_screen_hash = None
+        self.is_screen_skip_logged = False
         self.last_capture_attempt_time = 0.0
         self.capture_interval = 1.0
         self.dungeon_ocr_reader = DungeonOcrReader()
@@ -814,10 +816,20 @@ class MainWindow(MainWindowUI):
 
             screen = self.obs_manager.screen
             screen_hash = self.calc_screen_hash(screen)
-            if screen_hash == self.last_screen_hash:
-                logger.debug("画面変化なしのためメインループ処理をスキップ hash=%s", screen_hash)
+            screen_hash_distance = self.calc_screen_hash_distance(screen_hash)
+            if screen_hash_distance is not None and screen_hash_distance <= SCREEN_HASH_MAX_DISTANCE:
+                self.last_screen_hash = screen_hash
+                if not self.is_screen_skip_logged:
+                    logger.debug(
+                        "画面変化なしのためメインループ処理をスキップ hash=%s distance=%s threshold=%s",
+                        screen_hash,
+                        screen_hash_distance,
+                        SCREEN_HASH_MAX_DISTANCE,
+                    )
+                    self.is_screen_skip_logged = True
                 return
             self.last_screen_hash = screen_hash
+            self.is_screen_skip_logged = False
 
             self.latest_screen = screen
             self.update_dungeon_selection_from_screen(screen)
@@ -831,6 +843,11 @@ class MainWindow(MainWindowUI):
 
     def calc_screen_hash(self, screen):
         return imagehash.average_hash(screen, hash_size=SCREEN_HASH_SIZE)
+
+    def calc_screen_hash_distance(self, screen_hash):
+        if self.last_screen_hash is None:
+            return None
+        return screen_hash - self.last_screen_hash
 
     def update_dungeon_selection_from_screen(self, screen):
         now = time.monotonic()
