@@ -325,6 +325,10 @@ class MainWindow(MainWindowUI):
         self.memo_edit.setPlainText(self.siren_settings.params.get("memo", ""))
         self.memo_const_edit.setPlainText(self.siren_settings.params.get("memo_const", ""))
         self.init_dungeon_combo()
+        for category, table in self.item_tables.items():
+            table.cellDoubleClicked.connect(
+                lambda row, _column, category=category: self.toggle_item_identification(category, row)
+            )
         self.mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
         self.mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
         self.reset_button.clicked.connect(self.reset_identification)
@@ -685,6 +689,23 @@ class MainWindow(MainWindowUI):
             self.touch_item_identification_state()
         self.update_item_tables()
         self.statusBar().showMessage("識別状態を更新しました", 3000)
+
+    def toggle_item_identification(self, category, row):
+        if category in ("buki", "tate"):
+            self.statusBar().showMessage("武器・盾は識別状態の変更対象外です", 3000)
+            return
+
+        target = self.get_target_items(category)
+        if not 0 <= row < len(target):
+            return
+
+        item = target[row]
+        item.get = not item.get
+        self.touch_item_identification_state()
+        self.update_item_tables()
+        self.select_items_in_table(category, [item])
+        status = "識別済" if item.get else "未識別"
+        self.statusBar().showMessage(f"{item.name} を{status}にしました", 3000)
 
     def reset_identification(self):
         self.itemlist.reset()
