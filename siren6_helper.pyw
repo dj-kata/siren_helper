@@ -323,13 +323,41 @@ class MainWindow(MainWindowUI):
             self.statusBar().showMessage("設定を更新しました", 3000)
 
     def open_obs_dialog(self):
-        dialog = OBSControlDialog(self.config, self.obs_manager, self)
-        if dialog.exec():
-            self.update_all_configs()
-            logger.info("OBS制御設定を更新しました")
-            self.statusBar().showMessage("OBS制御設定を更新しました", 3000)
+        main_timer_was_active = self.main_timer.isActive()
+        display_timer_was_active = self.display_timer.isActive()
+        obs_monitor_was_running = getattr(self.obs_manager, "monitor_running", False)
+        obs_auto_reconnect = self.obs_manager.auto_reconnect
 
-    def update_all_configs(self):
+        if main_timer_was_active:
+            self.main_timer.stop()
+        if display_timer_was_active:
+            self.display_timer.stop()
+        self.obs_manager.auto_reconnect = False
+        if obs_monitor_was_running:
+            self.obs_manager.stop_monitor()
+        if self.capture_worker and self.capture_worker.is_alive():
+            self.capture_worker.join(timeout=3.0)
+
+        dialog_accepted = False
+        try:
+            dialog = OBSControlDialog(self.config, self.obs_manager, self)
+            if dialog.exec():
+                dialog_accepted = True
+                self.update_all_configs(connect_obs=False)
+                logger.info("OBS制御設定を更新しました")
+                self.statusBar().showMessage("OBS制御設定を更新しました", 3000)
+        finally:
+            self.obs_manager.auto_reconnect = obs_auto_reconnect
+            if self.config.obs_enabled and obs_monitor_was_running and not dialog_accepted:
+                self.obs_manager.start_monitor()
+            if main_timer_was_active:
+                self.main_timer.start(250)
+            if display_timer_was_active:
+                self.display_timer.start(500)
+            if dialog_accepted and self.config.obs_enabled:
+                QTimer.singleShot(250, self.connect_obs_after_dialog)
+
+    def update_all_configs(self, connect_obs: bool = True):
         old_port = self.config.websocket_data_port
         old_obs_enabled = self.config.obs_enabled
         self.config.load_config()
@@ -354,8 +382,20 @@ class MainWindow(MainWindowUI):
             self.capture_status = self.ui.main.waiting_capture
             return
 
-        if not self.obs_manager.is_connected:
+        if connect_obs and not self.obs_manager.is_connected:
             self.obs_manager.connect()
+
+    def connect_obs_after_dialog(self):
+        """OBS設定ダイアログを閉じた後にOBSへ接続する"""
+        if not self.config.obs_enabled or self.obs_manager.is_connected:
+            return
+
+        auto_reconnect = self.obs_manager.auto_reconnect
+        try:
+            self.obs_manager.auto_reconnect = False
+            self.obs_manager.connect()
+        finally:
+            self.obs_manager.auto_reconnect = auto_reconnect
 
     def apply_main_font(self):
         font = QFont(self.font())

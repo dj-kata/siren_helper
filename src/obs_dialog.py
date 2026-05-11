@@ -608,7 +608,13 @@ class OBSControlDialog(QDialog):
         if not self.config.obs_enabled:
             return
 
+        auto_reconnect = self.obs_manager.auto_reconnect
         try:
+            self.config.websocket_host = self.websocket_host_edit.text()
+            self.config.websocket_port = self.websocket_port_spin.value()
+            self.config.websocket_password = self.websocket_password_edit.text()
+
+            self.obs_manager.auto_reconnect = False
             self.obs_manager.disconnect()
             success = self.obs_manager.connect()
             if success:
@@ -619,6 +625,8 @@ class OBSControlDialog(QDialog):
         except Exception as e:
             logger.error(f"OBS再接続エラー: {e}")
             QMessageBox.warning(self, self.ui.message.error_title, self.ui.message.failed_reconnection_to_obs_with_error.format(e))
+        finally:
+            self.obs_manager.auto_reconnect = auto_reconnect
     
     def clear_monitor_source(self):
         """監視対象ソースをクリア"""

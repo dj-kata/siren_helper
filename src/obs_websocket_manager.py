@@ -211,7 +211,8 @@ class OBSWebSocketManager(QObject):
             try:
                 # 設定チェック
                 if not self.config:
-                    time.sleep(check_interval)
+                    if self.stop_event.wait(check_interval):
+                        break
                     continue
 
                 if not self.config.obs_enabled:
@@ -240,7 +241,8 @@ class OBSWebSocketManager(QObject):
                         if self.max_reconnect_attempts > 0 and consecutive_failures >= self.max_reconnect_attempts:
                             logger.error(f"Max reconnection attempts reached: {self.max_reconnect_attempts}")
                             self._emit_status(f"{self.ui.obs.status_reconnect_failed}（{self.max_reconnect_attempts}回試行）", False)
-                            time.sleep(check_interval)
+                            if self.stop_event.wait(check_interval):
+                                break
                             continue
                         
                         # 再接続試行
@@ -275,14 +277,16 @@ class OBSWebSocketManager(QObject):
                             # logger.debug(f"Reconnection failed: {e}")
                             
                             # 次の再接続まで待機
-                            time.sleep(self.reconnect_interval)
+                            if self.stop_event.wait(self.reconnect_interval):
+                                break
                             continue
                 
             except Exception as e:
                 logger.error(f"Monitor thread error: {e}\n{traceback.format_exc()}")
             
             # 次のチェックまで待機
-            time.sleep(check_interval)
+            if self.stop_event.wait(check_interval):
+                break
         
         logger.info("Monitor thread terminated")
     
