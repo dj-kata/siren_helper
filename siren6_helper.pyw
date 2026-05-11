@@ -16,7 +16,7 @@ from difflib import SequenceMatcher
 from pathlib import Path
 
 import imagehash
-from PySide6.QtCore import QTimer, Qt
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 
@@ -140,6 +140,8 @@ class UserSettings:
 class MainWindow(MainWindowUI):
     """メインウィンドウクラス - 制御ロジックを担当"""
 
+    capture_processed = Signal(object)
+
     def __init__(self):
         self.config = Config()
         super().__init__(self.config)
@@ -170,6 +172,9 @@ class MainWindow(MainWindowUI):
         self.last_shop_ocr_time = 0.0
         self.shop_ocr_interval = 1.5
         self.last_shop_result_signature = None
+        self.capture_worker = None
+        self.capture_worker_running = False
+        self.capture_worker_lock = threading.Lock()
 
         self.websocket_server = None
         self.websocket_loop = None
@@ -191,6 +196,7 @@ class MainWindow(MainWindowUI):
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.main_loop)
         self.main_timer.start(250)
+        self.capture_processed.connect(self.on_capture_processed)
 
         self.display_timer = QTimer()
         self.display_timer.timeout.connect(self.update_display)
@@ -809,9 +815,35 @@ class MainWindow(MainWindowUI):
                 return
             self.last_capture_attempt_time = now
 
+            self.start_capture_worker()
+        except Exception:
+            logger.error(f"メインループエラー: {traceback.format_exc()}")
+
+    def start_capture_worker(self):
+        with self.capture_worker_lock:
+            if self.capture_worker_running:
+                return
+            self.capture_worker_running = True
+
+        self.capture_worker = threading.Thread(
+            target=self.run_capture_pipeline,
+            daemon=True,
+            name="CapturePipelineThread",
+        )
+        self.capture_worker.start()
+
+    def run_capture_pipeline(self):
+        result = {
+            "screen": None,
+            "capture_failed": False,
+            "skipped": False,
+            "dungeon_result": None,
+            "shop_result": None,
+        }
+        try:
             self.obs_manager.screenshot()
             if self.obs_manager.screen is None:
-                self.capture_status = self.ui.main.capture_failed
+                result["capture_failed"] = True
                 return
 
             screen = self.obs_manager.screen
@@ -827,19 +859,48 @@ class MainWindow(MainWindowUI):
                         SCREEN_HASH_MAX_DISTANCE,
                     )
                     self.is_screen_skip_logged = True
+                result["skipped"] = True
                 return
             self.last_screen_hash = screen_hash
             self.is_screen_skip_logged = False
 
+            result["screen"] = screen
+            result["dungeon_result"] = self.read_dungeon_from_screen(screen)
+            result["shop_result"] = self.read_shop_from_screen(screen)
+        except Exception:
+            logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
+        finally:
+            self.capture_processed.emit(result)
+            with self.capture_worker_lock:
+                self.capture_worker_running = False
+
+    def on_capture_processed(self, result):
+        try:
+            if result.get("capture_failed"):
+                self.capture_status = self.ui.main.capture_failed
+                return
+            if result.get("skipped"):
+                return
+
+            screen = result.get("screen")
+            if screen is None:
+                return
+
             self.latest_screen = screen
-            self.update_dungeon_selection_from_screen(screen)
-            self.update_shop_identification_from_screen(screen)
+            dungeon_result = result.get("dungeon_result")
+            if dungeon_result:
+                self.apply_detected_dungeon_floor(dungeon_result.dungeon_key, dungeon_result.floor)
+
+            shop_result = result.get("shop_result")
+            if shop_result:
+                self.handle_shop_ocr_result(shop_result)
+
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.capture_status = self.ui.main.capture_ok
             self.broadcast_capture_state()
         except Exception:
-            logger.error(f"メインループエラー: {traceback.format_exc()}")
+            logger.error(f"画面取得/OCR結果反映エラー: {traceback.format_exc()}")
 
     def calc_screen_hash(self, screen):
         return imagehash.average_hash(screen, hash_size=SCREEN_HASH_SIZE)
@@ -850,18 +911,24 @@ class MainWindow(MainWindowUI):
         return screen_hash - self.last_screen_hash
 
     def update_dungeon_selection_from_screen(self, screen):
+        result = self.read_dungeon_from_screen(screen)
+        if result:
+            self.apply_detected_dungeon_floor(result.dungeon_key, result.floor)
+
+    def read_dungeon_from_screen(self, screen):
         now = time.monotonic()
         if now - self.last_dungeon_ocr_time < self.dungeon_ocr_interval:
-            return
+            return None
         self.last_dungeon_ocr_time = now
 
         try:
             result = self.dungeon_ocr_reader.read(screen, self.dungeons)
             if not result:
-                return
-            self.apply_detected_dungeon_floor(result.dungeon_key, result.floor)
+                return None
+            return result
         except Exception:
             logger.error(f"ダンジョンOCRエラー: {traceback.format_exc()}")
+            return None
 
     def apply_detected_dungeon_floor(self, dungeon_key, floor):
         dungeon_index = self.dungeon_combo.findData(dungeon_key) if self.dungeon_combo else -1
@@ -886,37 +953,46 @@ class MainWindow(MainWindowUI):
             self.statusBar().showMessage(f"OCRで更新しました: {dungeon_name} {floor}F", 3000)
 
     def update_shop_identification_from_screen(self, screen):
+        result = self.read_shop_from_screen(screen)
+        if result:
+            self.handle_shop_ocr_result(result)
+
+    def read_shop_from_screen(self, screen):
         now = time.monotonic()
         if now - self.last_shop_ocr_time < self.shop_ocr_interval:
-            return
+            return None
         self.last_shop_ocr_time = now
 
         try:
             result = self.shop_ocr_reader.read(screen)
             if not result:
-                return
-            signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
-            if signature == self.last_shop_result_signature:
-                logger.info(
-                    "店OCR: 同一結果のためスキップ item=%r kind=%s price=%s raw=%s",
-                    result.item_text,
-                    result.price_kind,
-                    result.price,
-                    result.raw_texts,
-                )
-                return
-            self.last_shop_result_signature = signature
+                return None
+            return result
+        except Exception:
+            logger.error(f"店OCRエラー: {traceback.format_exc()}")
+            return None
+
+    def handle_shop_ocr_result(self, result):
+        signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
+        if signature == self.last_shop_result_signature:
             logger.info(
-                "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
+                "店OCR: 同一結果のためスキップ item=%r kind=%s price=%s raw=%s",
                 result.item_text,
-                normalize_ocr_text(result.item_text),
                 result.price_kind,
                 result.price,
                 result.raw_texts,
             )
-            self.apply_shop_price_result(result)
-        except Exception:
-            logger.error(f"店OCRエラー: {traceback.format_exc()}")
+            return
+        self.last_shop_result_signature = signature
+        logger.info(
+            "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
+            result.item_text,
+            normalize_ocr_text(result.item_text),
+            result.price_kind,
+            result.price,
+            result.raw_texts,
+        )
+        self.apply_shop_price_result(result)
 
     def apply_shop_price_result(self, result):
         exact = self.find_item_by_name(result.item_text)
