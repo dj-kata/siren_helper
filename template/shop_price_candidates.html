@@ -13,6 +13,11 @@
   --accent: #69db7c;
   --warn: #ffd43b;
   --empty: #ff8787;
+  --show-header: 1;
+  --show-details: 1;
+  --candidate-name-font-size: 25px;
+  --candidate-detail-font-size: 17px;
+  --empty-font-size: 30px;
 }
 
 * {
@@ -44,7 +49,7 @@ body.hidden {
 }
 
 .header {
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -82,13 +87,18 @@ body.hidden {
 }
 
 .status {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   margin-top: 10px;
   color: var(--muted);
   font-size: 16px;
   font-weight: 800;
+}
+
+body.show-header .header,
+body.show-header .status {
+  display: flex;
 }
 
 .status-dot {
@@ -120,7 +130,7 @@ body.hidden {
 }
 
 .candidate-name {
-  font-size: 25px;
+  font-size: var(--candidate-name-font-size);
   font-weight: 900;
   line-height: 1.15;
   overflow: hidden;
@@ -131,15 +141,19 @@ body.hidden {
 .candidate-detail {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 17px;
+  font-size: var(--candidate-detail-font-size);
   font-weight: 800;
   line-height: 1.2;
+}
+
+body:not(.show-details) .candidate-detail {
+  display: none;
 }
 
 .empty {
   margin-top: 18px;
   color: var(--empty);
-  font-size: 30px;
+  font-size: var(--empty-font-size);
   font-weight: 900;
 }
 
@@ -194,6 +208,46 @@ const empty = document.getElementById("empty");
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
 let reconnectTimer = null;
+
+function readCustomNumber(name) {
+  const bodyValue = getComputedStyle(document.body).getPropertyValue(name).trim();
+  const rootValue = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return bodyValue || rootValue || "0";
+}
+
+function applyDisplayModes() {
+  const showHeaderParam = params.get("showHeader") || params.get("showHeadr");
+  if (showHeaderParam !== null) {
+    document.documentElement.style.setProperty("--show-header", showHeaderParam);
+  }
+  const showDetailsParam = params.get("showDetails") || params.get("details");
+  if (showDetailsParam !== null) {
+    document.documentElement.style.setProperty("--show-details", showDetailsParam);
+  }
+  applyFontSizeParam("fontSize", "--candidate-name-font-size", "--candidate-detail-font-size", "--empty-font-size");
+  applyFontSizeParam("nameFontSize", "--candidate-name-font-size");
+  applyFontSizeParam("detailFontSize", "--candidate-detail-font-size");
+  applyFontSizeParam("emptyFontSize", "--empty-font-size");
+  const showHeader = Number.parseFloat(readCustomNumber("--show-header")) > 0;
+  const showDetails = Number.parseFloat(readCustomNumber("--show-details")) > 0;
+  document.body.classList.toggle("show-header", showHeader);
+  document.body.classList.toggle("show-details", showDetails);
+}
+
+function normalizeCssSize(value) {
+  if (value === null) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+}
+
+function applyFontSizeParam(paramName, ...propertyNames) {
+  const size = normalizeCssSize(params.get(paramName));
+  if (!size) return;
+  for (const propertyName of propertyNames) {
+    document.documentElement.style.setProperty(propertyName, size);
+  }
+}
 
 function connect() {
   clearTimeout(reconnectTimer);
@@ -263,7 +317,7 @@ function createCandidate(candidate, priceKind) {
 
   const name = document.createElement("div");
   name.className = "candidate-name";
-  name.textContent = candidate.label || candidate.name || "";
+  name.textContent = formatCandidateName(candidate.label || candidate.name || "");
   node.appendChild(name);
 
   const detail = document.createElement("div");
@@ -276,6 +330,28 @@ function createCandidate(candidate, priceKind) {
   return node;
 }
 
+function formatCandidateName(rawName) {
+  const name = String(rawName || "");
+  const statuses = [
+    { pattern: /[（(]\s*呪い\s*[）)]/g, mark: "💀" },
+    { pattern: /[（(]\s*祝福\s*[）)]/g, mark: "🔔" },
+  ];
+  const marks = [];
+  let formatted = name;
+
+  for (const status of statuses) {
+    if (status.pattern.test(formatted)) {
+      marks.push(status.mark);
+      formatted = formatted.replace(status.pattern, "");
+    }
+    status.pattern.lastIndex = 0;
+  }
+
+  formatted = formatted.replace(/\s+/g, " ").trim();
+  return marks.length > 0 ? `${marks.join("")}${formatted}` : formatted;
+}
+
+applyDisplayModes();
 connect();
 </script>
 </body>

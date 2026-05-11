@@ -7,7 +7,7 @@
 <style>
 :root {
   --show-details: 0;
-  --show-next: 0;
+  --show-next: 1;
   --bg: transparent;
   --panel: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.22);
@@ -18,6 +18,13 @@
   --maze: #9cf08b;
   --icon-size: 54px;
   --floor-label-width: 64px;
+  --overlay-padding: 10px;
+  --compact-gap: 4px;
+  --floor-block-gap: 4px;
+  --floor-label-font-size: 18px;
+  --dekkai-cluster-size: 66px;
+  --dekkai-label-font-size: 18px;
+  --dekkai-mini-size: 21px;
 }
 
 * {
@@ -40,7 +47,7 @@ body {
 .overlay {
   width: 100vw;
   min-height: 100vh;
-  padding: 10px;
+  padding: var(--overlay-padding);
   background: var(--bg);
 }
 
@@ -94,14 +101,14 @@ body {
 
 .floor-block {
   display: grid;
-  gap: 4px;
+  gap: var(--floor-block-gap);
   width: 100%;
 }
 
 .floor-label {
   display: none;
   color: var(--text);
-  font-size: 18px;
+  font-size: var(--floor-label-font-size);
   font-weight: 900;
   line-height: 1;
 }
@@ -218,13 +225,13 @@ body:not(.details) .header {
 
 body:not(.details) .groups {
   display: grid;
-  gap: 4px;
+  gap: var(--compact-gap);
 }
 
 body:not(.details) .floor-block {
   display: grid;
   grid-template-columns: var(--floor-label-width) 1fr;
-  gap: 4px;
+  gap: var(--compact-gap);
   align-items: start;
 }
 
@@ -234,14 +241,14 @@ body:not(.details):not(.show-next) .floor-block {
 
 body:not(.details) .floor-label {
   width: var(--floor-label-width);
-  padding-right: 4px;
+  padding-right: var(--compact-gap);
   text-align: right;
 }
 
 body:not(.details) .floor-icons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--compact-gap);
   align-items: flex-start;
 }
 
@@ -266,8 +273,8 @@ body:not(.details) .icon-wrap {
 }
 
 body:not(.details) .dekkai-cluster {
-  width: 66px;
-  height: 66px;
+  width: var(--dekkai-cluster-size);
+  height: var(--dekkai-cluster-size);
   padding: 0;
   display: grid;
   place-items: center;
@@ -283,7 +290,7 @@ body:not(.details) .dekkai-label {
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 18px;
+  font-size: var(--dekkai-label-font-size);
   font-weight: 900;
   line-height: 1;
   text-shadow: none;
@@ -294,27 +301,27 @@ body:not(.details) .dekkai-label {
 body:not(.details) .dekkai-badge {
   width: 100%;
   height: 100%;
-  font-size: 18px;
+  font-size: var(--dekkai-label-font-size);
 }
 
 body:not(.details) .dekkai-cluster .monster {
-  width: 21px;
-  height: 21px;
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
   display: grid;
   place-items: center;
 }
 
 body:not(.details) .dekkai-cluster .icon-wrap {
-  width: 21px;
-  height: 21px;
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
 }
 
 body:not(.details) .dekkai-cluster .monster img,
 body:not(.details) .dekkai-cluster .fallback {
-  max-width: 21px;
-  max-height: 21px;
-  width: 21px;
-  height: 21px;
+  max-width: var(--dekkai-mini-size);
+  max-height: var(--dekkai-mini-size);
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
 }
 
 body.details .overlay {
@@ -418,10 +425,25 @@ const statusDot = document.getElementById("statusDot");
 const title = document.getElementById("title");
 const visibility = document.getElementById("visibility");
 const groups = document.getElementById("groups");
+const rootStyle = document.documentElement.style;
 
 let reconnectTimer = null;
 let latestData = null;
 let lastModeKey = "";
+
+function normalizeCssSize(value) {
+  if (value === null) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+}
+
+function applyCssSizeParam(paramName, propertyName) {
+  const size = normalizeCssSize(params.get(paramName));
+  if (size) {
+    rootStyle.setProperty(propertyName, size);
+  }
+}
 
 function readCustomNumber(name) {
   const bodyValue = getComputedStyle(document.body).getPropertyValue(name).trim();
@@ -430,6 +452,23 @@ function readCustomNumber(name) {
 }
 
 function applyDisplayModes() {
+  const detailsParam = params.get("details") || params.get("showDetails");
+  const nextParam = params.get("next") || params.get("showNext");
+  if (detailsParam !== null) {
+    rootStyle.setProperty("--show-details", detailsParam);
+  }
+  if (nextParam !== null) {
+    rootStyle.setProperty("--show-next", nextParam);
+  }
+  applyCssSizeParam("iconSize", "--icon-size");
+  applyCssSizeParam("padding", "--overlay-padding");
+  applyCssSizeParam("gap", "--compact-gap");
+  applyCssSizeParam("floorGap", "--floor-block-gap");
+  applyCssSizeParam("floorLabelWidth", "--floor-label-width");
+  applyCssSizeParam("floorLabelFontSize", "--floor-label-font-size");
+  applyCssSizeParam("dekkaiSize", "--dekkai-cluster-size");
+  applyCssSizeParam("dekkaiFontSize", "--dekkai-label-font-size");
+  applyCssSizeParam("dekkaiMiniSize", "--dekkai-mini-size");
   const details = Number.parseFloat(readCustomNumber("--show-details")) > 0;
   const showNext = Number.parseFloat(readCustomNumber("--show-next")) > 0;
   const modeKey = `${details ? 1 : 0}:${showNext ? 1 : 0}`;
