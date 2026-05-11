@@ -4,14 +4,11 @@ OBSから取得したゲーム画面を監視するための最小構成。
 """
 
 import base64
-import time
 
 from PySide6.QtCore import QByteArray
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -48,17 +45,13 @@ class MainWindowUI(QMainWindow):
         self.ui = load_ui_text(self.config)
 
         self.obs_status_label = None
-        self.capture_status_label = None
-        self.uptime_label = None
-        self.capture_count_label = None
-        self.last_capture_label = None
-        self.save_image_button = None
         self.top_tabs = None
         self.dungeon_data_tabs = None
         self.identify_tabs = None
         self.dungeon_combo = None
         self.monster_floor_combo = None
         self.monster_table = None
+        self.shop_candidate_table = None
         self.item_tables = {}
         self.item_count_labels = {}
         self.mark_identified_button = None
@@ -80,52 +73,23 @@ class MainWindowUI(QMainWindow):
         self.top_tabs = QTabWidget()
         main_layout.addWidget(self.top_tabs)
 
-        obs_tab = QWidget()
-        obs_tab_layout = QVBoxLayout(obs_tab)
-
-        obs_group = QGroupBox(self.ui.obs.connection_state)
-        obs_layout = QHBoxLayout()
-        self.obs_status_label = QLabel(self.ui.obs.not_connected)
-        self.obs_status_label.setStyleSheet("color: red; font-weight: bold;")
-        obs_layout.addWidget(self.obs_status_label)
-        obs_group.setLayout(obs_layout)
-        obs_tab_layout.addWidget(obs_group)
-
-        status_group = QGroupBox(self.ui.main.other_info)
-        status_layout = QGridLayout()
-
-        status_layout.addWidget(QLabel(self.ui.main.capture_state), 0, 0)
-        self.capture_status_label = QLabel(self.ui.main.waiting_capture)
-        status_layout.addWidget(self.capture_status_label, 0, 1)
-
-        status_layout.addWidget(QLabel(self.ui.main.ontime), 1, 0)
-        self.uptime_label = QLabel("00:00:00")
-        status_layout.addWidget(self.uptime_label, 1, 1)
-
-        status_layout.addWidget(QLabel(self.ui.main.capture_count), 2, 0)
-        self.capture_count_label = QLabel("0")
-        status_layout.addWidget(self.capture_count_label, 2, 1)
-
-        status_layout.addWidget(QLabel(self.ui.main.last_capture), 3, 0)
-        self.last_capture_label = QLabel("---")
-        self.last_capture_label.setWordWrap(True)
-        status_layout.addWidget(self.last_capture_label, 3, 1)
-
-        status_group.setLayout(status_layout)
-        obs_tab_layout.addWidget(status_group)
-
-        save_button_layout = QHBoxLayout()
-        self.save_image_button = QPushButton(self.ui.main.save_image)
-        self.save_image_button.clicked.connect(self.save_image)
-        save_button_layout.addWidget(self.save_image_button)
-        obs_tab_layout.addLayout(save_button_layout)
-
-        obs_tab_layout.addStretch()
-        self.top_tabs.addTab(obs_tab, "OBS")
         self.top_tabs.addTab(self.create_identification_tab(), "ダンジョン")
         self.top_tabs.addTab(self.create_memo_tab(), "メモ")
 
+        self.obs_status_label = QLabel(self.ui.obs.not_connected)
+        self.update_obs_status_label(False)
+        self.statusBar().addPermanentWidget(self.obs_status_label)
         self.statusBar().showMessage(self.ui.main.status_ready)
+
+    def update_obs_status_label(self, is_connected: bool):
+        if self.config.obs_enabled:
+            status = self.ui.obs.connected if is_connected else self.ui.obs.not_connected
+            color = "green" if is_connected else "red"
+        else:
+            status = self.ui.obs.disabled
+            color = "gray"
+        self.obs_status_label.setText(f"OBS: {status}")
+        self.obs_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def create_identification_tab(self):
         tab = QWidget()
@@ -136,6 +100,12 @@ class MainWindowUI(QMainWindow):
         self.dungeon_combo = QComboBox()
         self.dungeon_combo.setMinimumWidth(220)
         dungeon_layout.addWidget(self.dungeon_combo)
+        dungeon_layout.addWidget(QLabel("表示開始階:"))
+        self.monster_floor_combo = QComboBox()
+        self.monster_floor_combo.setMinimumWidth(100)
+        dungeon_layout.addWidget(self.monster_floor_combo)
+        self.reset_button = QPushButton("リセット")
+        dungeon_layout.addWidget(self.reset_button)
         dungeon_layout.addStretch()
         layout.addLayout(dungeon_layout)
 
@@ -182,11 +152,9 @@ class MainWindowUI(QMainWindow):
         button_layout = QHBoxLayout()
         self.mark_identified_button = QPushButton("識別済にする")
         self.mark_unknown_button = QPushButton("未識別に戻す")
-        self.reset_button = QPushButton("リセット")
         button_layout.addWidget(self.mark_identified_button)
         button_layout.addWidget(self.mark_unknown_button)
         button_layout.addStretch()
-        button_layout.addWidget(self.reset_button)
         item_layout.addLayout(button_layout)
 
         count_layout = QHBoxLayout()
@@ -207,16 +175,9 @@ class MainWindowUI(QMainWindow):
 
         monster_tab = QWidget()
         monster_layout = QVBoxLayout(monster_tab)
-        monster_filter_layout = QHBoxLayout()
-        monster_filter_layout.addWidget(QLabel("表示開始階:"))
-        self.monster_floor_combo = QComboBox()
-        self.monster_floor_combo.setMinimumWidth(100)
-        monster_filter_layout.addWidget(self.monster_floor_combo)
-        monster_filter_layout.addStretch()
-        monster_layout.addLayout(monster_filter_layout)
 
-        self.monster_table = QTableWidget(0, 5)
-        self.monster_table.setHorizontalHeaderLabels(["階", "視界", "出現モンスター", "デッ怪", "マゼ種"])
+        self.monster_table = QTableWidget(0, 4)
+        self.monster_table.setHorizontalHeaderLabels(["階", "出現モンスター", "デッ怪", "マゼ種"])
         self.monster_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.monster_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.monster_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -225,13 +186,28 @@ class MainWindowUI(QMainWindow):
         self.monster_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.monster_table.horizontalHeader().setStretchLastSection(True)
         self.monster_table.setColumnWidth(0, 60)
-        self.monster_table.setColumnWidth(1, 60)
-        self.monster_table.setColumnWidth(2, 520)
-        self.monster_table.setColumnWidth(3, 180)
+        self.monster_table.setColumnWidth(1, 520)
+        self.monster_table.setColumnWidth(2, 180)
         monster_layout.addWidget(self.monster_table)
 
         self.dungeon_data_tabs.addTab(item_tab, "アイテム")
         self.dungeon_data_tabs.addTab(monster_tab, "モンスター")
+
+        candidate_tab = QWidget()
+        candidate_layout = QVBoxLayout(candidate_tab)
+        self.shop_candidate_table = QTableWidget(0, 3)
+        self.shop_candidate_table.setHorizontalHeaderLabels(["未識別名", "種別", "候補"])
+        self.shop_candidate_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.shop_candidate_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.shop_candidate_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.shop_candidate_table.setWordWrap(False)
+        self.shop_candidate_table.verticalHeader().setVisible(False)
+        self.shop_candidate_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.shop_candidate_table.horizontalHeader().setStretchLastSection(True)
+        self.shop_candidate_table.setColumnWidth(0, 170)
+        self.shop_candidate_table.setColumnWidth(1, 70)
+        candidate_layout.addWidget(self.shop_candidate_table)
+        self.dungeon_data_tabs.addTab(candidate_tab, "識別候補")
         layout.addWidget(self.dungeon_data_tabs)
 
         return tab
@@ -338,21 +314,7 @@ class MainWindowUI(QMainWindow):
 
     def update_display(self):
         try:
-            status_msg, is_connected = self.obs_manager.get_status()
-            self.obs_status_label.setText(status_msg)
-            self.obs_status_label.setStyleSheet(
-                "color: green; font-weight: bold;" if is_connected else "color: red; font-weight: bold;"
-            )
-
-            elapsed = int(time.time() - self.start_time)
-            hours = elapsed // 3600
-            minutes = (elapsed % 3600) // 60
-            seconds = elapsed % 60
-            self.uptime_label.setText(f"{hours:02d}:{minutes:02d}:{seconds:02d}")
-
-            self.capture_count_label.setText(str(self.capture_count))
-            self.last_capture_label.setText(self.last_capture_time or "---")
-            self.capture_status_label.setText(self.capture_status)
+            self.update_obs_status_label(self.obs_manager.is_connected)
         except Exception:
             logger.exception("表示更新エラー")
 

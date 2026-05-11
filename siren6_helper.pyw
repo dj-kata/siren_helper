@@ -67,6 +67,14 @@ ITEM_CATEGORY_LABELS = {
     "buki": "武器",
     "tate": "盾",
 }
+SHOP_CANDIDATE_CATEGORY_COLORS = {
+    "kusa": "#e4f4dc",
+    "makimono": "#fff0bf",
+    "udewa": "#eadfff",
+    "tubo": "#dcedff",
+    "okou": "#ffe1cc",
+    "tue": "#eee3d6",
+}
 SHOP_CATEGORY_HINTS = {
     "草": "kusa",
     "種": "kusa",
@@ -171,6 +179,8 @@ class MainWindow(MainWindowUI):
         self.last_shop_ocr_time = 0.0
         self.shop_ocr_interval = 1.5
         self.last_shop_result_signature = None
+        self.item_identification_revision = 0
+        self.shop_candidate_history = {}
         self.shop_price_visible = False
         self.last_shop_price_visible_time = 0.0
         self.capture_worker = None
@@ -192,7 +202,7 @@ class MainWindow(MainWindowUI):
             QTimer.singleShot(1000, self.check_obs_configuration)
             self.execute_obs_triggers("app_start")
         else:
-            self.obs_status_label.setText(self.ui.obs.disabled)
+            self.update_obs_status_label(False)
 
         self.main_timer = QTimer()
         self.main_timer.timeout.connect(self.main_loop)
@@ -292,7 +302,7 @@ class MainWindow(MainWindowUI):
         if not self.config.obs_enabled:
             if self.obs_manager.is_connected or old_obs_enabled:
                 self.obs_manager.disconnect()
-            self.obs_status_label.setText(self.ui.obs.disabled)
+            self.update_obs_status_label(False)
             self.capture_status = self.ui.main.waiting_capture
             return
 
@@ -462,7 +472,7 @@ class MainWindow(MainWindowUI):
         dekkai_slots = max((len(floor.get("dekkai_cells") or floor.get("dekkai_monsters", [])) for floor in target), default=0)
         maze_slots = max((len(floor.get("maze_cells") or floor.get("maze_monsters", [])) for floor in target), default=0)
         headers = (
-            ["階", "視界"]
+            ["階"]
             + [f"M{i}" for i in range(1, monster_slots + 1)]
             + [f"デッ怪{i}" for i in range(1, dekkai_slots + 1)]
             + [f"マゼ種{i}" for i in range(1, maze_slots + 1)]
@@ -470,8 +480,7 @@ class MainWindow(MainWindowUI):
         self.monster_table.setColumnCount(len(headers))
         self.monster_table.setHorizontalHeaderLabels(headers)
         self.monster_table.setColumnWidth(0, 60)
-        self.monster_table.setColumnWidth(1, 60)
-        for column in range(2, len(headers)):
+        for column in range(1, len(headers)):
             self.monster_table.setColumnWidth(column, 120)
 
         row_height = self.monster_table.fontMetrics().height() + 6
@@ -479,15 +488,8 @@ class MainWindow(MainWindowUI):
 
         for row, floor in enumerate(target):
             self.set_monster_table_item(row, 0, self.format_floor_label(floor.get("floor", "")))
-            self.set_monster_table_item(
-                row,
-                1,
-                floor.get("visibility", ""),
-                floor.get("visibility_background", ""),
-                floor.get("visibility_foreground", ""),
-            )
 
-            column = 2
+            column = 1
             column = self.fill_monster_cells(row, column, monster_slots, floor, "monster_cells", "monsters")
             column = self.fill_monster_cells(row, column, dekkai_slots, floor, "dekkai_cells", "dekkai_monsters")
             self.fill_monster_cells(row, column, maze_slots, floor, "maze_cells", "maze_monsters")
@@ -673,20 +675,31 @@ class MainWindow(MainWindowUI):
             return
 
         target = self.get_target_items(category)
+        changed = False
         for row in selected_rows:
             if 0 <= row < len(target):
+                changed = changed or target[row].get != identified
                 target[row].get = identified
 
+        if changed:
+            self.touch_item_identification_state()
         self.update_item_tables()
         self.statusBar().showMessage("識別状態を更新しました", 3000)
 
     def reset_identification(self):
         self.itemlist.reset()
+        self.shop_candidate_history.clear()
+        self.touch_item_identification_state()
         self.memo_edit.clear()
         self.reset_monster_floor_filter()
         self.update_monster_table()
         self.update_item_tables()
         self.statusBar().showMessage("リセットしました", 3000)
+
+    def touch_item_identification_state(self):
+        self.item_identification_revision += 1
+        self.last_shop_result_signature = None
+        self.hide_shop_price_state()
 
     def update_item_tables(self):
         for category in ITEM_CATEGORIES:
@@ -698,6 +711,7 @@ class MainWindow(MainWindowUI):
 
         self.write_stat_xml(counts)
         self.update_monster_table()
+        self.update_shop_candidate_history_table()
 
     def update_item_table(self, category):
         table = self.item_tables[category]
@@ -794,10 +808,7 @@ class MainWindow(MainWindowUI):
             return False
 
     def on_obs_connection_changed(self, is_connected: bool, message: str):
-        self.obs_status_label.setText(message)
-        self.obs_status_label.setStyleSheet(
-            "color: green; font-weight: bold;" if is_connected else "color: red; font-weight: bold;"
-        )
+        self.update_obs_status_label(is_connected)
         if is_connected:
             logger.info("OBS接続が確立されました")
 
@@ -972,7 +983,13 @@ class MainWindow(MainWindowUI):
             return None
 
     def handle_shop_ocr_result(self, result):
-        signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
+        signature = (
+            normalize_ocr_text(result.item_text),
+            result.price_kind,
+            result.price,
+            self.selected_dungeon_key,
+            self.item_identification_revision,
+        )
         if signature == self.last_shop_result_signature:
             if self.shop_price_visible:
                 self.last_shop_price_visible_time = time.monotonic()
@@ -1028,7 +1045,10 @@ class MainWindow(MainWindowUI):
                 item.get,
             )
             self.hide_shop_price_state()
+            before_get = item.get
             item.get = True
+            if not before_get:
+                self.touch_item_identification_state()
             self.update_item_tables()
             self.select_items_in_table(category, [item])
             self.statusBar().showMessage(f"OCR識別済: {item.name}", 4000)
@@ -1048,6 +1068,7 @@ class MainWindow(MainWindowUI):
             return
 
         candidates = self.find_shop_price_candidates(category, result.price, result.price_kind)
+        self.remember_shop_price_candidates(result, category, candidates)
         self.broadcast_shop_price_state(result, category, candidates)
         logger.info(
             "店OCR: 価格候補 category=%s kind=%s price=%s candidates=%s",
@@ -1154,6 +1175,75 @@ class MainWindow(MainWindowUI):
                 continue
             candidates.extend(self.find_item_price_candidates(item, price, price_kind))
         return candidates
+
+    def remember_shop_price_candidates(self, result, category, candidates):
+        if category in ("buki", "tate") or not candidates:
+            return
+
+        key = normalize_ocr_text(result.item_text) or str(result.item_text)
+        entry = self.shop_candidate_history.setdefault(
+            key,
+            {
+                "display_name": result.item_text,
+                "category": category,
+                "candidates": [],
+                "seen": set(),
+            },
+        )
+        entry["display_name"] = result.item_text or entry["display_name"]
+        entry["category"] = category
+
+        changed = False
+        for candidate in candidates:
+            item, _detail, price_state = candidate
+            if item.category.name in ("buki", "tate"):
+                continue
+            candidate_key = (id(item), price_state)
+            if candidate_key in entry["seen"]:
+                continue
+            entry["seen"].add(candidate_key)
+            entry["candidates"].append(candidate)
+            changed = True
+
+        if changed:
+            self.update_shop_candidate_history_table()
+
+    def update_shop_candidate_history_table(self):
+        table = getattr(self, "shop_candidate_table", None)
+        if not table:
+            return
+
+        rows = []
+        for entry in self.shop_candidate_history.values():
+            visible_candidates = [
+                candidate
+                for candidate in entry["candidates"]
+                if not candidate[0].get and not candidate[0].default_get
+            ]
+            if not visible_candidates:
+                continue
+            rows.append((entry["display_name"], entry["category"], visible_candidates))
+
+        table.setRowCount(len(rows))
+        row_height = table.fontMetrics().height() + 8
+        table.verticalHeader().setDefaultSectionSize(row_height)
+        for row, (display_name, category, candidates) in enumerate(rows):
+            values = [
+                display_name,
+                ITEM_CATEGORY_LABELS.get(category, category),
+                "、".join(self.format_shop_history_candidate(candidate) for candidate in candidates),
+            ]
+            background = QColor(SHOP_CANDIDATE_CATEGORY_COLORS.get(category, "#ffffff"))
+            for column, value in enumerate(values):
+                cell = QTableWidgetItem(str(value))
+                cell.setBackground(QBrush(background))
+                table.setItem(row, column, cell)
+            table.setRowHeight(row, row_height)
+
+    def format_shop_history_candidate(self, candidate):
+        item, _detail, price_state = candidate
+        price_state_text = f"({price_state})" if price_state else ""
+        return f"{item.name}{price_state_text}"
 
     def find_item_price_candidates(self, item, price, price_kind):
         candidates = []
@@ -1262,7 +1352,7 @@ class MainWindow(MainWindowUI):
         if not table:
             return
 
-        self.top_tabs.setCurrentIndex(1)
+        self.top_tabs.setCurrentIndex(0)
         self.dungeon_data_tabs.setCurrentIndex(0)
         tab_index = ITEM_CATEGORIES.index(category)
         self.identify_tabs.setCurrentIndex(tab_index)
