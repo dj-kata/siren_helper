@@ -12,8 +12,10 @@ import sys
 import threading
 import traceback
 import time
+from difflib import SequenceMatcher
 from pathlib import Path
 
+import imagehash
 from PySide6.QtCore import QTimer, Qt
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
@@ -29,12 +31,14 @@ except ImportError:
 from src.config import Config
 from src.config_dialog import ConfigDialog
 from src.dungeon_ocr import DungeonOcrReader
+from src.dungeon_ocr import normalize_ocr_text
 from src.funcs import escape_for_filename
 from src.item import ItemList
 from src.logger import get_logger
 from src.main_window import MainWindowUI
 from src.obs_dialog import OBSControlDialog
 from src.obs_websocket_manager import OBSWebSocketManager
+from src.shop_ocr import ShopOcrReader
 from src.update import GitHubUpdater
 from src.websocket_server import DataWebSocketServer
 
@@ -49,6 +53,30 @@ except Exception:
 
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
 STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
+SCREEN_HASH_SIZE = 16
+MIN_IDENTIFIED_ITEM_MATCH_SCORE = 0.82
+ITEM_CATEGORY_LABELS = {
+    "kusa": "草",
+    "makimono": "巻物",
+    "udewa": "腕輪",
+    "tubo": "壺",
+    "okou": "お香",
+    "tue": "杖",
+    "buki": "武器",
+    "tate": "盾",
+}
+SHOP_CATEGORY_HINTS = {
+    "草": "kusa",
+    "種": "kusa",
+    "巻物": "makimono",
+    "腕輪": "udewa",
+    "壺": "tubo",
+    "香": "okou",
+    "杖": "tue",
+    "剣": "buki",
+    "刀": "buki",
+    "盾": "tate",
+}
 DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
 INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
@@ -130,11 +158,16 @@ class MainWindow(MainWindowUI):
         self.last_capture_time = None
         self.capture_status = self.ui.main.waiting_capture
         self.latest_screen = None
+        self.last_screen_hash = None
         self.last_capture_attempt_time = 0.0
         self.capture_interval = 1.0
         self.dungeon_ocr_reader = DungeonOcrReader()
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 5.0
+        self.shop_ocr_reader = ShopOcrReader()
+        self.last_shop_ocr_time = 0.0
+        self.shop_ocr_interval = 1.5
+        self.last_shop_result_signature = None
 
         self.websocket_server = None
         self.websocket_loop = None
@@ -779,14 +812,25 @@ class MainWindow(MainWindowUI):
                 self.capture_status = self.ui.main.capture_failed
                 return
 
-            self.latest_screen = self.obs_manager.screen
-            self.update_dungeon_selection_from_screen(self.latest_screen)
+            screen = self.obs_manager.screen
+            screen_hash = self.calc_screen_hash(screen)
+            if screen_hash == self.last_screen_hash:
+                logger.debug("画面変化なしのためメインループ処理をスキップ hash=%s", screen_hash)
+                return
+            self.last_screen_hash = screen_hash
+
+            self.latest_screen = screen
+            self.update_dungeon_selection_from_screen(screen)
+            self.update_shop_identification_from_screen(screen)
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             self.capture_status = self.ui.main.capture_ok
             self.broadcast_capture_state()
         except Exception:
             logger.error(f"メインループエラー: {traceback.format_exc()}")
+
+    def calc_screen_hash(self, screen):
+        return imagehash.average_hash(screen, hash_size=SCREEN_HASH_SIZE)
 
     def update_dungeon_selection_from_screen(self, screen):
         now = time.monotonic()
@@ -823,6 +867,222 @@ class MainWindow(MainWindowUI):
         if changed:
             dungeon_name = self.dungeon_combo.currentText()
             self.statusBar().showMessage(f"OCRで更新しました: {dungeon_name} {floor}F", 3000)
+
+    def update_shop_identification_from_screen(self, screen):
+        now = time.monotonic()
+        if now - self.last_shop_ocr_time < self.shop_ocr_interval:
+            return
+        self.last_shop_ocr_time = now
+
+        try:
+            result = self.shop_ocr_reader.read(screen)
+            if not result:
+                return
+            signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
+            if signature == self.last_shop_result_signature:
+                logger.info(
+                    "店OCR: 同一結果のためスキップ item=%r kind=%s price=%s raw=%s",
+                    result.item_text,
+                    result.price_kind,
+                    result.price,
+                    result.raw_texts,
+                )
+                return
+            self.last_shop_result_signature = signature
+            logger.info(
+                "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
+                result.item_text,
+                normalize_ocr_text(result.item_text),
+                result.price_kind,
+                result.price,
+                result.raw_texts,
+            )
+            self.apply_shop_price_result(result)
+        except Exception:
+            logger.error(f"店OCRエラー: {traceback.format_exc()}")
+
+    def apply_shop_price_result(self, result):
+        exact = self.find_item_by_name(result.item_text)
+        if exact:
+            category, item = exact
+            logger.info(
+                "店OCR: 識別済みアイテム一致 ocr=%r category=%s item=%s before_get=%s",
+                result.item_text,
+                category,
+                item.name,
+                item.get,
+            )
+            item.get = True
+            self.update_item_tables()
+            self.select_items_in_table(category, [item])
+            self.statusBar().showMessage(f"OCR識別済: {item.name}", 4000)
+            return
+
+        category = self.detect_shop_item_category(result.item_text)
+        if not category:
+            logger.info(
+                "店OCR: 種別判定失敗 ocr=%r normalized=%r price=%s kind=%s",
+                result.item_text,
+                self.normalize_item_match_text(result.item_text),
+                result.price,
+                result.price_kind,
+            )
+            self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
+            return
+
+        candidates = self.find_shop_price_candidates(category, result.price, result.price_kind)
+        logger.info(
+            "店OCR: 価格候補 category=%s kind=%s price=%s candidates=%s",
+            category,
+            result.price_kind,
+            result.price,
+            tuple(self.format_shop_candidate(candidate) for candidate in candidates),
+        )
+        items = [candidate[0] for candidate in candidates]
+        self.select_items_in_table(category, items)
+
+        price_label = "売値" if result.price_kind == "sell" else "買値"
+        category_label = ITEM_CATEGORY_LABELS.get(category, category)
+        if candidates:
+            names = [self.format_shop_candidate(candidate) for candidate in candidates]
+            preview = "、".join(names[:8])
+            suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
+            self.statusBar().showMessage(
+                f"店OCR候補: {category_label} {price_label}{result.price} -> {preview}{suffix}",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage(
+                f"店OCR候補なし: {category_label} {price_label}{result.price}",
+                5000,
+            )
+
+    def find_item_by_name(self, text):
+        target = self.normalize_item_match_text(text)
+        if not target:
+            logger.info("店OCR: アイテム名照合 targetなし text=%r", text)
+            return None
+
+        containing_match = None
+        best_match = None
+        best_score = 0.0
+        for category in ITEM_CATEGORIES:
+            for item in self.get_all_items(category):
+                item_name = self.normalize_item_match_text(item.name)
+                if item_name == target:
+                    logger.info(
+                        "店OCR: アイテム名 完全一致 target=%r category=%s item=%s",
+                        target,
+                        category,
+                        item.name,
+                    )
+                    return category, item
+                if item_name and item_name in target:
+                    containing_match = containing_match or (category, item)
+                score = SequenceMatcher(None, item_name, target).ratio()
+                if score > best_score:
+                    best_match = (category, item)
+                    best_score = score
+
+        if containing_match:
+            category, item = containing_match
+            logger.info(
+                "店OCR: アイテム名 部分一致 target=%r category=%s item=%s best_score=%.3f",
+                target,
+                category,
+                item.name,
+                best_score,
+            )
+            return containing_match
+        if best_match and best_score >= MIN_IDENTIFIED_ITEM_MATCH_SCORE:
+            category, item = best_match
+            logger.info(
+                "店OCR: アイテム名 近似一致 target=%r category=%s item=%s score=%.3f",
+                target,
+                category,
+                item.name,
+                best_score,
+            )
+            return best_match
+        if best_match:
+            category, item = best_match
+            logger.info(
+                "店OCR: アイテム名 一致なし target=%r best_category=%s best_item=%s best_score=%.3f threshold=%.3f",
+                target,
+                category,
+                item.name,
+                best_score,
+                MIN_IDENTIFIED_ITEM_MATCH_SCORE,
+            )
+        return None
+
+    def normalize_item_match_text(self, text):
+        normalized = normalize_ocr_text(text)
+        return normalized.replace("力の草", "ちからの草")
+
+    def detect_shop_item_category(self, text):
+        target = normalize_ocr_text(text)
+        for hint, category in SHOP_CATEGORY_HINTS.items():
+            if hint in target:
+                logger.info("店OCR: 種別判定 target=%r hint=%s category=%s", target, hint, category)
+                return category
+        logger.info("店OCR: 種別判定なし target=%r", target)
+        return None
+
+    def find_shop_price_candidates(self, category, price, price_kind):
+        candidates = []
+        for item in self.get_target_items(category):
+            if item.get or item.default_get:
+                continue
+            for candidate_price, detail in self.iter_item_prices(item, price_kind):
+                if candidate_price == price:
+                    candidates.append((item, detail, False))
+                if candidate_price * 2 == price:
+                    candidates.append((item, detail, True))
+        return candidates
+
+    def iter_item_prices(self, item, price_kind):
+        attr = "sell" if price_kind == "sell" else "buy"
+        unit_attr = "sell_unit" if price_kind == "sell" else "buy_unit"
+        base = getattr(item, attr, 0)
+        unit = getattr(item, unit_attr, None)
+        if unit is None:
+            yield base, ""
+            return
+
+        for capacity in range(item.capa_min, item.capa_max + 1):
+            yield base + unit * capacity, f"[{capacity}]"
+
+    def format_shop_candidate(self, candidate):
+        item, detail, blessed = candidate
+        blessed_text = "(祝福)" if blessed else ""
+        return f"{item.name}{detail}{blessed_text}"
+
+    def select_items_in_table(self, category, items):
+        table = self.item_tables.get(category)
+        if not table:
+            return
+
+        self.top_tabs.setCurrentIndex(1)
+        self.dungeon_data_tabs.setCurrentIndex(0)
+        tab_index = ITEM_CATEGORIES.index(category)
+        self.identify_tabs.setCurrentIndex(tab_index)
+
+        table.clearSelection()
+        target = self.get_target_items(category)
+        selected_rows = []
+        for item in items:
+            try:
+                row = target.index(item)
+            except ValueError:
+                continue
+            for column in range(table.columnCount()):
+                cell = table.item(row, column)
+                if cell:
+                    cell.setSelected(True)
+            selected_rows.append(row)
+        if selected_rows:
+            table.scrollToItem(table.item(selected_rows[0], 0))
 
     def broadcast_capture_state(self):
         if not self.websocket_server:

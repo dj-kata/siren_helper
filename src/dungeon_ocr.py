@@ -2,9 +2,14 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from pathlib import Path
+
+from src.logger import get_logger
 
 
-DUNGEON_INFO_CROP = (0, 0, 500, 125)
+logger = get_logger(__name__)
+DUNGEON_INFO_CROP_XYWH = (0, 0, 500, 125)
+DEBUG_CROP_PATH = Path("log") / "dungeon_ocr_crop.png"
 MIN_DUNGEON_MATCH_SCORE = 0.72
 FLOOR_PATTERN = re.compile(r"(?<!\d)(\d{1,3})\s*(?:F|階)")
 TEXT_NOISE_PATTERN = re.compile(r"[\s・･\-_ー,，.。:：/／\\|｜()\[\]{}「」『』【】]+")
@@ -23,6 +28,11 @@ def normalize_ocr_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "")
     normalized = normalized.replace("髓", "髄").replace("随", "髄")
     return TEXT_NOISE_PATTERN.sub("", normalized)
+
+
+def xywh_to_box(crop_xywh):
+    x, y, width, height = crop_xywh
+    return (x, y, x + width, y + height)
 
 
 def extract_floor(text: str) -> int | None:
@@ -74,6 +84,13 @@ class DungeonOcrReader:
         raw_text = self._read_text(screen)
         floor = extract_floor(raw_text)
         dungeon, score = match_dungeon(raw_text, dungeons)
+        logger.info(
+            "ダンジョンOCR: raw=%r floor=%s dungeon=%s score=%.3f",
+            raw_text,
+            floor,
+            dungeon.get("name", "") if dungeon else None,
+            score,
+        )
         if floor is None or not dungeon:
             return None
 
@@ -89,9 +106,11 @@ class DungeonOcrReader:
         import cv2
         import numpy as np
 
-        crop = screen.crop(DUNGEON_INFO_CROP).convert("RGB")
+        crop_box = xywh_to_box(DUNGEON_INFO_CROP_XYWH)
+        crop = screen.crop(crop_box).convert("RGB")
+        self._save_debug_crop(crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
-        result = self._engine().ocr(image)
+        result = self._engine().ocr(image, cls=False)
         texts = []
         for page in result or []:
             if not page:
@@ -102,11 +121,25 @@ class DungeonOcrReader:
                 text, _score = text_score
                 if text:
                     texts.append(str(text))
+        logger.info(
+            "ダンジョンOCR crop xywh=%s crop_box=%s crop_size=%s texts=%s",
+            DUNGEON_INFO_CROP_XYWH,
+            crop_box,
+            crop.size,
+            tuple(texts),
+        )
         return " ".join(texts)
+
+    def _save_debug_crop(self, crop):
+        try:
+            DEBUG_CROP_PATH.parent.mkdir(parents=True, exist_ok=True)
+            crop.save(DEBUG_CROP_PATH)
+        except Exception:
+            logger.exception("ダンジョンOCR debug crop保存エラー")
 
     def _engine(self):
         if self._ocr is None:
             from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
-            self._ocr = ONNXPaddleOcr(use_gpu=False, lang="japan")
+            self._ocr = ONNXPaddleOcr(use_gpu=False, lang="japan", show_log=False)
         return self._ocr
