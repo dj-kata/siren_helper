@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monster Icons</title>
+<style>
+:root {
+  --show-details: 0;
+  --show-next: 1;
+  --bg: transparent;
+  --panel: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.22);
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --normal: #8fd9ff;
+  --dekkai: #ffcf66;
+  --maze: #9cf08b;
+  --icon-size: 54px;
+  --floor-label-width: 64px;
+  --overlay-padding: 10px;
+  --compact-gap: 4px;
+  --floor-block-gap: 4px;
+  --floor-label-font-size: 18px;
+  --dekkai-cluster-size: 66px;
+  --dekkai-label-font-size: 18px;
+  --dekkai-mini-size: 21px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: "Meiryo", "Yu Gothic", sans-serif;
+  text-shadow:
+    3px 3px 0 #000,
+    -1px 1px 0 #000,
+    1px -1px 0 #000,
+    -1px -1px 0 #000;
+}
+
+.overlay {
+  width: 100vw;
+  min-height: 100vh;
+  padding: var(--overlay-padding);
+  background: var(--bg);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: calc(var(--show-details) * 12px);
+  height: calc(var(--show-details) * 34px);
+  overflow: hidden;
+}
+
+.title {
+  min-width: 0;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: calc(4px + var(--show-details) * 6px);
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #db3d44;
+  box-shadow: 0 0 8px #db3d44;
+}
+
+.status-dot.connected {
+  background: #3ddc84;
+  box-shadow: 0 0 8px #3ddc84;
+}
+
+.groups {
+  display: grid;
+  gap: 10px;
+}
+
+.floor-block {
+  display: grid;
+  gap: var(--floor-block-gap);
+  width: 100%;
+}
+
+.floor-label {
+  display: none;
+  color: var(--text);
+  font-size: var(--floor-label-font-size);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: calc(var(--show-details) * 112px) 1fr;
+  gap: calc(var(--show-details) * 10px);
+  align-items: start;
+}
+
+.group-label {
+  width: calc(var(--show-details) * 112px);
+  height: calc(var(--show-details) * 45px);
+  padding: calc(var(--show-details) * 8px) calc(var(--show-details) * 9px);
+  border-left: calc(var(--show-details) * 6px) solid var(--normal);
+  background: var(--panel);
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow: hidden;
+  opacity: var(--show-details);
+}
+
+.group[data-group="dekkai"] .group-label {
+  border-left-color: var(--dekkai);
+}
+
+.group[data-group="maze"] .group-label {
+  border-left-color: var(--maze);
+}
+
+.monster-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(4px + var(--show-details) * 4px);
+  align-items: flex-start;
+}
+
+.monster {
+  min-width: 0;
+  padding: calc(var(--show-details) * 6px) calc(var(--show-details) * 5px) calc(var(--show-details) * 5px);
+  border: calc(var(--show-details) * 1px) solid var(--border);
+  border-radius: calc(var(--show-details) * 7px);
+  background: rgba(255, 255, 255, calc(var(--show-details) * 0.08));
+  text-align: center;
+}
+
+.icon-wrap {
+  position: relative;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  margin: 0 auto calc(var(--show-details) * 4px);
+  display: grid;
+  place-items: center;
+}
+
+.monster img {
+  max-width: var(--icon-size);
+  max-height: var(--icon-size);
+  object-fit: contain;
+}
+
+.fallback {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  display: none;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.dekkai-badge {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #3b0b67;
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: none;
+  white-space: nowrap;
+}
+
+.monster-name {
+  width: calc(var(--show-details) * 66px);
+  height: calc(var(--show-details) * 32px);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  opacity: var(--show-details);
+}
+
+.empty {
+  color: var(--muted);
+  font-size: 24px;
+  font-weight: 800;
+}
+
+body:not(.details) .header {
+  display: none;
+}
+
+body:not(.details) .groups {
+  display: grid;
+  gap: var(--compact-gap);
+}
+
+body:not(.details) .floor-block {
+  display: grid;
+  grid-template-columns: var(--floor-label-width) 1fr;
+  gap: var(--compact-gap);
+  align-items: start;
+}
+
+body:not(.details):not(.show-next) .floor-block {
+  grid-template-columns: 1fr;
+}
+
+body:not(.details) .floor-label {
+  width: var(--floor-label-width);
+  padding-right: var(--compact-gap);
+  text-align: right;
+}
+
+body:not(.details) .floor-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--compact-gap);
+  align-items: flex-start;
+}
+
+body:not(.details) .group {
+  display: contents;
+}
+
+body:not(.details) .group-label,
+body:not(.details) .monster-name {
+  display: none;
+}
+
+body:not(.details) .monster {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+body:not(.details) .icon-wrap {
+  margin: 0;
+}
+
+body:not(.details) .dekkai-cluster {
+  width: var(--dekkai-cluster-size);
+  height: var(--dekkai-cluster-size);
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #3b0b67;
+  border: 2px solid #fff;
+  overflow: hidden;
+}
+
+body:not(.details) .dekkai-label {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: var(--dekkai-label-font-size);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: none;
+  white-space: nowrap;
+  transform: translateY(1px);
+}
+
+body:not(.details) .dekkai-badge {
+  width: 100%;
+  height: 100%;
+  font-size: var(--dekkai-label-font-size);
+}
+
+body:not(.details) .dekkai-cluster .monster {
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
+  display: grid;
+  place-items: center;
+}
+
+body:not(.details) .dekkai-cluster .icon-wrap {
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
+}
+
+body:not(.details) .dekkai-cluster .monster img,
+body:not(.details) .dekkai-cluster .fallback {
+  max-width: var(--dekkai-mini-size);
+  max-height: var(--dekkai-mini-size);
+  width: var(--dekkai-mini-size);
+  height: var(--dekkai-mini-size);
+}
+
+body.details .overlay {
+  padding: 14px;
+}
+
+body.details .header {
+  height: auto;
+}
+
+body.details .groups {
+  display: grid;
+  gap: 10px;
+}
+
+body.show-next .floor-label {
+  display: block;
+}
+
+body.details.show-next .floor-block {
+  gap: 8px;
+}
+
+body.details .floor-icons {
+  display: grid;
+  gap: 10px;
+}
+
+body.details .group {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+
+body.details .group-label {
+  width: auto;
+  height: auto;
+  padding: 8px 9px;
+  border-left-width: 6px;
+  opacity: 1;
+}
+
+body.details .monster-grid {
+  gap: 8px;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+body.details .monster {
+  flex: 0 0 auto;
+  width: max(66px, var(--icon-size));
+  padding: 6px 5px 5px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+
+body.details .icon-wrap {
+  margin: 0 auto 4px;
+}
+
+body.details .monster-name {
+  width: max(66px, var(--icon-size));
+  height: 32px;
+  opacity: 1;
+}
+
+@media (max-width: 300px) {
+  body.details .group {
+    grid-template-columns: 1fr;
+  }
+
+  body.details .group-label {
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+</style>
+</head>
+<body>
+<main class="overlay">
+  <header class="header">
+    <div class="title" id="title">--</div>
+    <div class="meta">
+      <span id="visibility"></span>
+      <span class="status-dot" id="statusDot"></span>
+    </div>
+  </header>
+  <section class="groups" id="groups">
+    <div class="empty">接続待ち</div>
+  </section>
+</main>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const port = params.get("port") || "8767";
+const host = params.get("host") || "localhost";
+const statusDot = document.getElementById("statusDot");
+const title = document.getElementById("title");
+const visibility = document.getElementById("visibility");
+const groups = document.getElementById("groups");
+const rootStyle = document.documentElement.style;
+
+let reconnectTimer = null;
+let latestData = null;
+let lastModeKey = "";
+
+function normalizeCssSize(value) {
+  if (value === null) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+}
+
+function applyCssSizeParam(paramName, propertyName) {
+  const size = normalizeCssSize(params.get(paramName));
+  if (size) {
+    rootStyle.setProperty(propertyName, size);
+  }
+}
+
+function readCustomNumber(name) {
+  const bodyValue = getComputedStyle(document.body).getPropertyValue(name).trim();
+  const rootValue = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return bodyValue || rootValue || "0";
+}
+
+function applyDisplayModes() {
+  const detailsParam = params.get("details") || params.get("showDetails");
+  const nextParam = params.get("next") || params.get("showNext");
+  if (detailsParam !== null) {
+    rootStyle.setProperty("--show-details", detailsParam);
+  }
+  if (nextParam !== null) {
+    rootStyle.setProperty("--show-next", nextParam);
+  }
+  applyCssSizeParam("iconSize", "--icon-size");
+  applyCssSizeParam("padding", "--overlay-padding");
+  applyCssSizeParam("gap", "--compact-gap");
+  applyCssSizeParam("floorGap", "--floor-block-gap");
+  applyCssSizeParam("floorLabelWidth", "--floor-label-width");
+  applyCssSizeParam("floorLabelFontSize", "--floor-label-font-size");
+  applyCssSizeParam("dekkaiSize", "--dekkai-cluster-size");
+  applyCssSizeParam("dekkaiFontSize", "--dekkai-label-font-size");
+  applyCssSizeParam("dekkaiMiniSize", "--dekkai-mini-size");
+  const details = Number.parseFloat(readCustomNumber("--show-details")) > 0;
+  const showNext = Number.parseFloat(readCustomNumber("--show-next")) > 0;
+  const modeKey = `${details ? 1 : 0}:${showNext ? 1 : 0}`;
+  document.body.classList.toggle("details", details);
+  document.body.classList.toggle("show-next", showNext);
+  if (latestData && modeKey !== lastModeKey) {
+    renderData(latestData);
+  }
+  lastModeKey = modeKey;
+}
+
+function isDetailsMode() {
+  return document.body.classList.contains("details");
+}
+
+function isShowNextMode() {
+  return document.body.classList.contains("show-next");
+}
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  const socket = new WebSocket(`ws://${host}:${port}`);
+
+  socket.addEventListener("open", () => {
+    statusDot.classList.add("connected");
+  });
+
+  socket.addEventListener("message", (event) => {
+    let message = null;
+    try {
+      message = JSON.parse(event.data);
+    } catch (_error) {
+      return;
+    }
+    if (message.type === "monster_floor") {
+      render(message.data || {});
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    statusDot.classList.remove("connected");
+    reconnectTimer = setTimeout(connect, 1500);
+  });
+
+  socket.addEventListener("error", () => {
+    socket.close();
+  });
+}
+
+function render(data) {
+  latestData = data;
+  renderData(data);
+}
+
+function renderData(data) {
+  title.textContent = `${data.dungeon_name || "--"} ${data.floor_label || ""}`;
+  visibility.textContent = data.visibility ? `視界 ${data.visibility}` : "";
+  groups.replaceChildren();
+  groups.appendChild(createFloorBlock(data, false));
+  if (isShowNextMode() && data.next_floor) {
+    groups.appendChild(createFloorBlock(data.next_floor, true));
+  }
+}
+
+function createFloorBlock(data, isNext) {
+  const floorBlock = document.createElement("section");
+  floorBlock.className = "floor-block";
+
+  const floorLabel = document.createElement("div");
+  floorLabel.className = "floor-label";
+  floorLabel.textContent = `${isNext ? "次 " : ""}${data.floor_label || ""}`;
+  floorBlock.appendChild(floorLabel);
+
+  const floorIcons = document.createElement("div");
+  floorIcons.className = "floor-icons";
+  floorBlock.appendChild(floorIcons);
+
+  const visibleGroups = (data.groups || []).filter((group) => (group.monsters || []).length > 0);
+  if (visibleGroups.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "出現なし";
+    floorIcons.appendChild(empty);
+    return floorBlock;
+  }
+
+  if (!isDetailsMode()) {
+    for (const group of visibleGroups) {
+      if (group.key === "dekkai") {
+        floorIcons.appendChild(createDekkaiCluster(group.monsters || []));
+        continue;
+      }
+      for (const monster of group.monsters || []) {
+        floorIcons.appendChild(createMonster(monster, group.key));
+      }
+    }
+    return floorBlock;
+  }
+
+  for (const group of visibleGroups) {
+    const section = document.createElement("section");
+    section.className = "group";
+    section.dataset.group = group.key || "";
+
+    const label = document.createElement("div");
+    label.className = "group-label";
+    label.textContent = group.label || "";
+    section.appendChild(label);
+
+    const grid = document.createElement("div");
+    grid.className = "monster-grid";
+    for (const monster of group.monsters || []) {
+      grid.appendChild(group.key === "dekkai" ? createDekkaiMonster(monster) : createMonster(monster, group.key));
+    }
+    section.appendChild(grid);
+    floorIcons.appendChild(section);
+  }
+  return floorBlock;
+}
+
+function createMonster(monster, groupKey) {
+  const item = document.createElement("article");
+  item.className = "monster";
+
+  const iconWrap = document.createElement("div");
+  iconWrap.className = "icon-wrap";
+
+  const fallback = document.createElement("div");
+  fallback.className = "fallback";
+  fallback.textContent = (monster.name || "?").slice(0, 2);
+
+  const img = document.createElement("img");
+  img.alt = monster.name || "";
+  setImageSource(img, fallback, monster.icon_sources || [], 0);
+
+  iconWrap.appendChild(img);
+  iconWrap.appendChild(fallback);
+  item.appendChild(iconWrap);
+
+  const name = document.createElement("div");
+  name.className = "monster-name";
+  name.textContent = monster.name || "";
+  item.appendChild(name);
+
+  return item;
+}
+
+function createDekkaiMonster(monster) {
+  const item = document.createElement("article");
+  item.className = "monster";
+
+  const iconWrap = document.createElement("div");
+  iconWrap.className = "icon-wrap";
+
+  const badge = document.createElement("div");
+  badge.className = "dekkai-badge";
+  badge.textContent = "デッ";
+
+  iconWrap.appendChild(badge);
+  item.appendChild(iconWrap);
+
+  const name = document.createElement("div");
+  name.className = "monster-name";
+  name.textContent = monster.name || "デッ怪";
+  item.appendChild(name);
+
+  return item;
+}
+
+function createDekkaiCluster(monsters) {
+  const cluster = document.createElement("div");
+  cluster.className = "dekkai-cluster";
+  const badge = document.createElement("div");
+  badge.className = "dekkai-badge";
+  badge.textContent = "デッ";
+  cluster.appendChild(badge);
+  return cluster;
+}
+
+function setImageSource(img, fallback, sources, index) {
+  if (index >= sources.length) {
+    img.style.display = "none";
+    fallback.style.display = "grid";
+    return;
+  }
+  img.onerror = () => setImageSource(img, fallback, sources, index + 1);
+  img.src = sources[index];
+}
+
+applyDisplayModes();
+window.addEventListener("load", applyDisplayModes);
+requestAnimationFrame(applyDisplayModes);
+setTimeout(applyDisplayModes, 250);
+setTimeout(applyDisplayModes, 1000);
+setInterval(applyDisplayModes, 500);
+connect();
+</script>
+</body>
+</html>

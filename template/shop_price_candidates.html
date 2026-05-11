@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Price Candidates</title>
+<style>
+:root {
+  --bg: transparent;
+  --line: rgba(255, 255, 255, 0.28);
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --accent: #69db7c;
+  --warn: #ffd43b;
+  --empty: #ff8787;
+  --show-header: 1;
+  --show-details: 1;
+  --candidate-name-font-size: 25px;
+  --candidate-detail-font-size: 17px;
+  --empty-font-size: 30px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: "Meiryo", "Yu Gothic", sans-serif;
+  text-shadow:
+    4px 4px 0 #000,
+    -1px 1px 0 #000,
+    1px -1px 0 #000,
+    -1px -1px 0 #000;
+}
+
+body.hidden {
+  visibility: hidden;
+}
+
+.overlay {
+  width: 100vw;
+  min-height: 100vh;
+  padding: 14px 16px;
+  background: var(--bg);
+}
+
+.header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--line);
+}
+
+.title {
+  min-width: 0;
+}
+
+.item {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.price {
+  flex-shrink: 0;
+  color: var(--warn);
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+body.show-header .header,
+body.show-header .status {
+  display: flex;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #db3d44;
+  box-shadow: 0 0 8px #db3d44;
+}
+
+.status-dot.connected {
+  background: #3ddc84;
+  box-shadow: 0 0 8px #3ddc84;
+}
+
+.candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 14px;
+  margin-top: 14px;
+}
+
+.candidate {
+  min-width: 0;
+  padding: 7px 10px;
+  border-left: 6px solid var(--accent);
+  background: rgba(0, 0, 18, 0.72);
+  border-radius: 6px;
+}
+
+.candidate-name {
+  font-size: var(--candidate-name-font-size);
+  font-weight: 900;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--candidate-detail-font-size);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+body:not(.show-details) .candidate-detail {
+  display: none;
+}
+
+.empty {
+  margin-top: 18px;
+  color: var(--empty);
+  font-size: var(--empty-font-size);
+  font-weight: 900;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 10px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .item,
+  .price {
+    font-size: 28px;
+  }
+
+  .candidates {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body class="hidden">
+<main class="overlay">
+  <section class="header">
+    <div class="title">
+      <div class="item" id="item">価格識別待ち</div>
+      <div class="meta" id="meta">買取価格表示で更新されます</div>
+    </div>
+    <div class="price" id="price">--</div>
+  </section>
+  <div class="status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">WebSocket接続待ち</span>
+  </div>
+  <section class="candidates" id="candidates"></section>
+  <div class="empty" id="empty"></div>
+</main>
+
+<script>
+const params = new URLSearchParams(location.search);
+const host = params.get("host") || "localhost";
+const port = params.get("port") || "8767";
+const item = document.getElementById("item");
+const meta = document.getElementById("meta");
+const price = document.getElementById("price");
+const candidates = document.getElementById("candidates");
+const empty = document.getElementById("empty");
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+let reconnectTimer = null;
+
+function readCustomNumber(name) {
+  const bodyValue = getComputedStyle(document.body).getPropertyValue(name).trim();
+  const rootValue = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return bodyValue || rootValue || "0";
+}
+
+function applyDisplayModes() {
+  const showHeaderParam = params.get("showHeader") || params.get("showHeadr");
+  if (showHeaderParam !== null) {
+    document.documentElement.style.setProperty("--show-header", showHeaderParam);
+  }
+  const showDetailsParam = params.get("showDetails") || params.get("details");
+  if (showDetailsParam !== null) {
+    document.documentElement.style.setProperty("--show-details", showDetailsParam);
+  }
+  applyFontSizeParam("fontSize", "--candidate-name-font-size", "--candidate-detail-font-size", "--empty-font-size");
+  applyFontSizeParam("nameFontSize", "--candidate-name-font-size");
+  applyFontSizeParam("detailFontSize", "--candidate-detail-font-size");
+  applyFontSizeParam("emptyFontSize", "--empty-font-size");
+  const showHeader = Number.parseFloat(readCustomNumber("--show-header")) > 0;
+  const showDetails = Number.parseFloat(readCustomNumber("--show-details")) > 0;
+  document.body.classList.toggle("show-header", showHeader);
+  document.body.classList.toggle("show-details", showDetails);
+}
+
+function normalizeCssSize(value) {
+  if (value === null) return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^-?\d+(\.\d+)?$/.test(trimmed) ? `${trimmed}px` : trimmed;
+}
+
+function applyFontSizeParam(paramName, ...propertyNames) {
+  const size = normalizeCssSize(params.get(paramName));
+  if (!size) return;
+  for (const propertyName of propertyNames) {
+    document.documentElement.style.setProperty(propertyName, size);
+  }
+}
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  const socket = new WebSocket(`ws://${host}:${port}`);
+
+  socket.addEventListener("open", () => {
+    statusDot.classList.add("connected");
+    statusText.textContent = "接続中";
+  });
+
+  socket.addEventListener("message", (event) => {
+    let message = null;
+    try {
+      message = JSON.parse(event.data);
+    } catch (_error) {
+      return;
+    }
+    if (message.type === "shop_price") {
+      render(message.data || {});
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    statusDot.classList.remove("connected");
+    statusText.textContent = "再接続待ち";
+    hide();
+    reconnectTimer = setTimeout(connect, 1500);
+  });
+
+  socket.addEventListener("error", () => {
+    socket.close();
+  });
+}
+
+function render(data) {
+  const candidateList = data.candidates || [];
+  if (!data.visible || candidateList.length === 0) {
+    hide();
+    return;
+  }
+
+  document.body.classList.remove("hidden");
+  const priceText = Number.isFinite(data.price) ? data.price.toLocaleString("ja-JP") : "--";
+  item.textContent = data.item_text || "価格識別待ち";
+  meta.textContent = `${data.category_label || "判定不可"} / ${data.price_label || "価格"} / ${data.updated_at || "--:--:--"}`;
+  price.textContent = `${priceText}G`;
+  candidates.replaceChildren();
+  empty.textContent = "";
+
+  for (const candidate of candidateList) {
+    candidates.appendChild(createCandidate(candidate, data.price_kind));
+  }
+}
+
+function hide() {
+  document.body.classList.add("hidden");
+  item.textContent = "";
+  meta.textContent = "";
+  price.textContent = "";
+  candidates.replaceChildren();
+  empty.textContent = "";
+}
+
+function createCandidate(candidate, priceKind) {
+  const node = document.createElement("article");
+  node.className = "candidate";
+
+  const name = document.createElement("div");
+  name.className = "candidate-name";
+  name.textContent = formatCandidateName(candidate.label || candidate.name || "");
+  node.appendChild(name);
+
+  const detail = document.createElement("div");
+  detail.className = "candidate-detail";
+  if (priceKind === "manual") {
+    detail.textContent = `${candidate.category_label || ""} 買値${Number(candidate.buy || 0).toLocaleString("ja-JP")}G / 売値${Number(candidate.sell || 0).toLocaleString("ja-JP")}G`;
+  } else {
+    const basePrice = priceKind === "sell" ? candidate.sell : candidate.buy;
+    const label = priceKind === "sell" ? "売値" : "買値";
+    detail.textContent = `${candidate.category_label || ""} ${label}${Number(basePrice || 0).toLocaleString("ja-JP")}G`;
+  }
+  node.appendChild(detail);
+
+  return node;
+}
+
+function formatCandidateName(rawName) {
+  const name = String(rawName || "");
+  const statuses = [
+    { pattern: /[（(]\s*呪い\s*[）)]/g, mark: "💀" },
+    { pattern: /[（(]\s*祝福\s*[）)]/g, mark: "🔔" },
+  ];
+  const marks = [];
+  let formatted = name;
+
+  for (const status of statuses) {
+    if (status.pattern.test(formatted)) {
+      marks.push(status.mark);
+      formatted = formatted.replace(status.pattern, "");
+    }
+    status.pattern.lastIndex = 0;
+  }
+
+  formatted = formatted.replace(/\s+/g, " ").trim();
+  return marks.length > 0 ? `${marks.join("")}${formatted}` : formatted;
+}
+
+applyDisplayModes();
+connect();
+</script>
+</body>
+</html>

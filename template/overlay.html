@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="ja">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIREN6 Stream Overlay</title>
+    <style>
+        :root {
+            --stage-width: 1920px;
+            --stage-height: 1080px;
+            --gap: 4px;
+            --game-size: 90;
+            --game-border: 10px;
+            --frame: #050505;
+            --line: #72f4ff;
+            --panel: rgba(7, 11, 18, 0.84);
+            --panel-soft: rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: transparent;
+            font-family: "Yu Gothic", "Meiryo", Arial, sans-serif;
+            color: #ffffff;
+        }
+
+        #stage {
+            position: relative;
+            width: var(--stage-width);
+            height: var(--stage-height);
+            background: transparent;
+            transform-origin: top left;
+        }
+
+        .game-area {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: var(--game-width);
+            height: var(--game-height);
+            border: var(--game-border) solid var(--frame);
+            background: transparent;
+        }
+
+        .game-inner {
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--line);
+            box-shadow:
+                0 0 18px rgba(114, 244, 255, 0.58),
+                inset 0 0 12px rgba(114, 244, 255, 0.26);
+        }
+
+        .own-party {
+            position: absolute;
+            left: 0;
+            top: var(--game-height);
+            width: var(--game-width);
+            height: var(--bottom-height);
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            padding: 10px 14px 12px;
+        }
+
+        .opponent-party {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: var(--side-width);
+            height: var(--stage-height);
+            display: grid;
+            grid-template-rows: repeat(6, 1fr);
+            gap: 8px;
+            padding: 12px 12px 12px 8px;
+        }
+
+        .slot {
+            position: relative;
+            min-width: 0;
+            min-height: 0;
+            border: 3px solid rgba(255, 255, 255, 0.22);
+            border-radius: 8px;
+            background:
+                linear-gradient(135deg, var(--panel-soft), rgba(255, 255, 255, 0.02)),
+                var(--panel);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+            overflow: hidden;
+        }
+
+        .slot:not(.empty) {
+            cursor: pointer;
+        }
+
+        .own-party .slot {
+            border-color: rgba(100, 165, 245, 0.56);
+        }
+
+        .opponent-party .slot {
+            border-color: rgba(229, 115, 115, 0.62);
+        }
+
+        .slot.selected {
+            border-color: var(--selected-own);
+            box-shadow:
+                0 0 0 6px rgba(69, 184, 255, 0.78),
+                0 0 0 12px rgba(18, 94, 255, 0.46),
+                inset 0 0 0 5px rgba(255, 255, 255, 0.66),
+                0 0 34px rgba(69, 184, 255, 0.92),
+                0 8px 24px rgba(0, 0, 0, 0.34);
+        }
+
+        .opponent-party .slot.selected {
+            border-color: var(--selected-opponent);
+            box-shadow:
+                0 0 0 6px rgba(255, 95, 109, 0.78),
+                0 0 0 12px rgba(207, 24, 45, 0.46),
+                inset 0 0 0 5px rgba(255, 255, 255, 0.66),
+                0 0 34px rgba(255, 95, 109, 0.92),
+                0 8px 24px rgba(0, 0, 0, 0.34);
+        }
+
+        .status-labels {
+            position: absolute;
+            left: 8px;
+            top: 8px;
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            pointer-events: none;
+        }
+
+        .status-label {
+            display: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 17px;
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .slot.selected .select-label {
+            display: block;
+            background: var(--selected-own);
+            color: #101010;
+            box-shadow: 0 0 14px rgba(69, 184, 255, 0.8);
+        }
+
+        .opponent-party .slot.selected .select-label {
+            background: var(--selected-opponent);
+            color: #ffffff;
+            box-shadow: 0 0 14px rgba(255, 95, 109, 0.8);
+        }
+
+        .slot.fainted .fainted-label {
+            display: block;
+            background: linear-gradient(180deg, var(--fainted), var(--fainted-deep));
+            color: #ffffff;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 0 14px rgba(181, 108, 255, 0.82);
+        }
+
+        .faint-mark {
+            display: none;
+            position: absolute;
+            z-index: 3;
+            pointer-events: none;
+            filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.88));
+        }
+
+        .slot.fainted .faint-mark {
+            display: block;
+        }
+
+        .faint-mark::before,
+        .faint-mark::after {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 58%;
+            height: 7px;
+            border-radius: 999px;
+            background: var(--fainted-x);
+            box-shadow:
+                0 0 0 2px rgba(255, 255, 255, 0.88),
+                0 0 12px rgba(255, 47, 69, 0.9);
+            transform-origin: center;
+        }
+
+        .faint-mark::before {
+            transform: translate(-50%, -50%) rotate(45deg);
+        }
+
+        .faint-mark::after {
+            transform: translate(-50%, -50%) rotate(-45deg);
+        }
+
+        .pokemon-icon {
+            position: absolute;
+            object-fit: contain;
+            image-rendering: auto;
+        }
+
+        .own-party .pokemon-icon {
+            left: 34%;
+            top: 50%;
+            width: 98px;
+            height: 98px;
+            transform: translate(-50%, -50%);
+        }
+
+        .own-party .faint-mark {
+            left: calc(34% - 49px);
+            top: calc(50% - 49px);
+            width: 98px;
+            height: 98px;
+        }
+
+        .opponent-party .pokemon-icon {
+            left: 12px;
+            top: 50%;
+            width: 88px;
+            height: 88px;
+            transform: translateY(-50%);
+        }
+
+        .opponent-party .faint-mark {
+            left: 12px;
+            top: calc(50% - 44px);
+            width: 88px;
+            height: 88px;
+        }
+
+        .type-row {
+            position: absolute;
+            left: auto;
+            right: 56px;
+            top: 50%;
+            bottom: auto;
+            width: 72px;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 4px;
+            transform: translateY(-50%);
+            min-width: 0;
+        }
+
+        .type-badge {
+            width: 72px;
+            height: 24px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 900;
+            line-height: 20px;
+            text-align: center;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.82);
+            box-shadow:
+                inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+                0 2px 6px rgba(0, 0, 0, 0.38);
+        }
+
+        .item-icon {
+            position: absolute;
+            right: 9px;
+            bottom: 9px;
+            width: 38px;
+            height: 38px;
+            object-fit: contain;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.48);
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.58);
+        }
+
+        .opponent-party .item-icon {
+            right: 9px;
+            bottom: 9px;
+            width: 34px;
+            height: 34px;
+        }
+
+        .empty .pokemon-icon,
+        .empty .item-icon,
+        .empty .type-row,
+        .empty .status-labels,
+        .empty .faint-mark {
+            display: none;
+        }
+
+        .game-area {
+            width: var(--game-width);
+            height: var(--game-height);
+        }
+
+        .own-party {
+            top: var(--bottom-top);
+            width: var(--game-width);
+            height: var(--bottom-height);
+            display: block;
+            padding: 0;
+        }
+
+        .opponent-party {
+            left: var(--side-left);
+            right: auto;
+            width: var(--side-width);
+            height: var(--stage-height);
+            display: block;
+            padding: 0;
+        }
+
+        .embed-frame {
+            width: 100%;
+            height: 100%;
+            display: block;
+            border: 0;
+            background: transparent;
+        }
+
+        .opponent-party .embed-frame {
+            background: rgba(0, 0, 0, 0.34);
+        }
+    </style>
+</head>
+<body>
+    <main id="stage">
+        <section class="game-area" aria-label="ゲーム画面">
+            <div class="game-inner"></div>
+        </section>
+        <section id="own-party" class="own-party" aria-label="モンスター表示"></section>
+        <section id="opponent-party" class="opponent-party" aria-label="ショップ価格候補"></section>
+    </main>
+
+    <script>
+        const DEFAULT_PORT = "8767";
+        const params = new URLSearchParams(location.search);
+        const port = params.get("port") || DEFAULT_PORT;
+        const host = params.get("host") || "localhost";
+        const ownParty = document.getElementById("own-party");
+        const opponentParty = document.getElementById("opponent-party");
+        const monsterSrc = params.get("monster") || "monster_icons.html";
+        const shopSrc = params.get("shop") || "shop_price_candidates.html";
+        const rootStyle = document.documentElement.style;
+
+        function clamp(value, min, max) {
+            return Math.min(max, Math.max(min, value));
+        }
+
+        function cssNumber(name, fallback) {
+            const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+            const value = Number.parseFloat(raw);
+            return Number.isFinite(value) ? value : fallback;
+        }
+
+        function readGameSize() {
+            const raw = params.get("gameSize") || params.get("game") || params.get("gamePercent");
+            const value = Number.parseFloat(raw);
+            if (Number.isFinite(value)) {
+                return clamp(value, 0, 100);
+            }
+            return clamp(cssNumber("--game-size", 83.333), 0, 100);
+        }
+
+        function applyGameLayout() {
+            const stageWidth = cssNumber("--stage-width", 1920);
+            const stageHeight = cssNumber("--stage-height", 1080);
+            const gap = cssNumber("--gap", 16);
+            const gameSize = readGameSize();
+            const ratio = gameSize / 100;
+            const gameWidth = stageWidth * ratio;
+            const gameHeight = stageHeight * ratio;
+            const hasGame = gameSize > 0;
+            const horizontalGap = hasGame && gameWidth < stageWidth ? gap : 0;
+            const verticalGap = hasGame && gameHeight < stageHeight ? gap : 0;
+            const sideLeft = gameWidth + horizontalGap;
+            const bottomTop = gameHeight + verticalGap;
+
+            rootStyle.setProperty("--game-size", String(gameSize));
+            rootStyle.setProperty("--game-width", `${gameWidth}px`);
+            rootStyle.setProperty("--game-height", `${gameHeight}px`);
+            rootStyle.setProperty("--side-left", `${sideLeft}px`);
+            rootStyle.setProperty("--side-width", `${Math.max(0, stageWidth - sideLeft)}px`);
+            rootStyle.setProperty("--bottom-top", `${bottomTop}px`);
+            rootStyle.setProperty("--bottom-height", `${Math.max(0, stageHeight - bottomTop)}px`);
+            rootStyle.setProperty("--game-border", hasGame ? "10px" : "0px");
+        }
+
+        function fitStage() {
+            const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+            document.getElementById("stage").style.transform = `scale(${scale})`;
+        }
+
+        function withSharedParams(src, extra = {}) {
+            const url = new URL(src, location.href);
+            url.searchParams.set("host", host);
+            url.searchParams.set("port", port);
+            for (const [key, value] of Object.entries(extra)) {
+                url.searchParams.set(key, value);
+            }
+            return url.href;
+        }
+
+        function makeFrame(src, title) {
+            const frame = document.createElement("iframe");
+            frame.className = "embed-frame";
+            frame.title = title;
+            frame.src = src;
+            return frame;
+        }
+
+        function mountFrames() {
+            ownParty.replaceChildren(makeFrame(withSharedParams(monsterSrc, {
+                details: params.get("details") || "0",
+                next: params.get("next") || "1",
+                iconSize: params.get("monsterIconSize") || "42",
+                padding: params.get("monsterPadding") || "4",
+                gap: params.get("monsterGap") || "2",
+                floorGap: params.get("monsterFloorGap") || "2",
+                floorLabelWidth: params.get("monsterFloorLabelWidth") || "58",
+                floorLabelFontSize: params.get("monsterFloorLabelFontSize") || "17",
+                dekkaiSize: params.get("monsterDekkaiSize") || "46",
+                dekkaiFontSize: params.get("monsterDekkaiFontSize") || "16",
+                dekkaiMiniSize: params.get("monsterDekkaiMiniSize") || "15",
+            }), "Monster Icons"));
+            opponentParty.replaceChildren(makeFrame(withSharedParams(shopSrc, {
+                showHeader: params.get("shopHeader") || "0",
+                showDetails: params.get("shopDetails") || "0",
+                fontSize: params.get("shopFontSize") || "15",
+                detailFontSize: params.get("shopDetailFontSize") || "10",
+                emptyFontSize: params.get("shopEmptyFontSize") || "20",
+            }), "Shop Price Candidates"));
+        }
+
+        window.addEventListener("resize", fitStage);
+        applyGameLayout();
+        mountFrames();
+        fitStage();
+    </script>
+</body>
+</html>
