@@ -6,18 +6,21 @@ OBSから取得したゲーム画面を監視するための最小構成。
 import base64
 
 from PySide6.QtCore import QByteArray
-from PySide6.QtGui import QAction, QActionGroup
+from PySide6.QtGui import QAction, QActionGroup, QIntValidator
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QButtonGroup,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QComboBox,
+    QRadioButton,
     QTabWidget,
     QTableWidget,
     QVBoxLayout,
@@ -57,6 +60,14 @@ class MainWindowUI(QMainWindow):
         self.item_count_labels = {}
         self.mark_identified_button = None
         self.mark_unknown_button = None
+        self.manual_shop_category_combo = None
+        self.manual_shop_price_edit = None
+        self.manual_shop_price_kind_group = None
+        self.manual_shop_price_kind_none = None
+        self.manual_shop_price_kind_buy = None
+        self.manual_shop_price_kind_sell = None
+        self.manual_shop_name_edit = None
+        self.manual_shop_add_button = None
         self.reset_button = None
         self.memo_edit = None
         self.memo_const_edit = None
@@ -157,6 +168,48 @@ class MainWindowUI(QMainWindow):
         button_layout.addWidget(self.mark_unknown_button)
         button_layout.addStretch()
         item_layout.addLayout(button_layout)
+
+        manual_layout = QHBoxLayout()
+        manual_layout.addWidget(QLabel("手動サーチ:"))
+        self.manual_shop_category_combo = QComboBox()
+        for key, label in [
+            ("kusa", "草"),
+            ("makimono", "巻物"),
+            ("udewa", "腕輪"),
+            ("tubo", "壺"),
+            ("okou", "お香"),
+            ("tue", "杖"),
+        ]:
+            self.manual_shop_category_combo.addItem(label, key)
+        manual_layout.addWidget(self.manual_shop_category_combo)
+        manual_layout.addWidget(QLabel("値段:"))
+        self.manual_shop_price_edit = QLineEdit()
+        self.manual_shop_price_edit.setValidator(QIntValidator(0, 999999))
+        self.manual_shop_price_edit.setPlaceholderText("G")
+        self.manual_shop_price_edit.setMaximumWidth(110)
+        manual_layout.addWidget(self.manual_shop_price_edit)
+        manual_layout.addWidget(QLabel("価格種別:"))
+        self.manual_shop_price_kind_group = QButtonGroup(self)
+        self.manual_shop_price_kind_none = QRadioButton("指定なし")
+        self.manual_shop_price_kind_buy = QRadioButton("買値")
+        self.manual_shop_price_kind_sell = QRadioButton("売値")
+        self.manual_shop_price_kind_none.setChecked(True)
+        for button, price_kind in [
+            (self.manual_shop_price_kind_none, "manual"),
+            (self.manual_shop_price_kind_buy, "buy"),
+            (self.manual_shop_price_kind_sell, "sell"),
+        ]:
+            self.manual_shop_price_kind_group.addButton(button)
+            button.setProperty("price_kind", price_kind)
+            manual_layout.addWidget(button)
+        manual_layout.addWidget(QLabel("未識別名:"))
+        self.manual_shop_name_edit = QLineEdit()
+        self.manual_shop_name_edit.setMaximumWidth(180)
+        manual_layout.addWidget(self.manual_shop_name_edit)
+        self.manual_shop_add_button = QPushButton("識別候補に追加")
+        manual_layout.addWidget(self.manual_shop_add_button)
+        manual_layout.addStretch()
+        item_layout.addLayout(manual_layout)
 
         count_layout = QHBoxLayout()
         for key, label in [

@@ -322,9 +322,13 @@ function createCandidate(candidate, priceKind) {
 
   const detail = document.createElement("div");
   detail.className = "candidate-detail";
-  const basePrice = priceKind === "sell" ? candidate.sell : candidate.buy;
-  const label = priceKind === "sell" ? "売値" : "買値";
-  detail.textContent = `${candidate.category_label || ""} ${label}${Number(basePrice || 0).toLocaleString("ja-JP")}G`;
+  if (priceKind === "manual") {
+    detail.textContent = `${candidate.category_label || ""} 買値${Number(candidate.buy || 0).toLocaleString("ja-JP")}G / 売値${Number(candidate.sell || 0).toLocaleString("ja-JP")}G`;
+  } else {
+    const basePrice = priceKind === "sell" ? candidate.sell : candidate.buy;
+    const label = priceKind === "sell" ? "売値" : "買値";
+    detail.textContent = `${candidate.category_label || ""} ${label}${Number(basePrice || 0).toLocaleString("ja-JP")}G`;
+  }
   node.appendChild(detail);
 
   return node;

@@ -15,6 +15,7 @@ import traceback
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
+from types import SimpleNamespace
 
 if getattr(sys, "frozen", False):
     os.chdir(Path(sys.executable).resolve().parent)
@@ -378,6 +379,10 @@ class MainWindow(MainWindowUI):
             )
         self.mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
         self.mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
+        self.manual_shop_category_combo.currentIndexChanged.connect(self.update_manual_shop_price_search)
+        self.manual_shop_price_edit.textChanged.connect(self.update_manual_shop_price_search)
+        self.manual_shop_price_kind_group.buttonClicked.connect(lambda _button: self.update_manual_shop_price_search())
+        self.manual_shop_add_button.clicked.connect(self.add_manual_shop_candidate)
         self.reset_button.clicked.connect(self.reset_identification)
         self.update_item_tables()
 
@@ -759,10 +764,19 @@ class MainWindow(MainWindowUI):
         self.shop_candidate_history.clear()
         self.touch_item_identification_state()
         self.memo_edit.clear()
+        self.reset_manual_shop_search()
         self.reset_monster_floor_filter()
         self.update_monster_table()
         self.update_item_tables()
         self.statusBar().showMessage("リセットしました", 3000)
+
+    def reset_manual_shop_search(self):
+        if self.manual_shop_price_kind_none:
+            self.manual_shop_price_kind_none.setChecked(True)
+        if self.manual_shop_price_edit:
+            self.manual_shop_price_edit.clear()
+        if self.manual_shop_name_edit:
+            self.manual_shop_name_edit.clear()
 
     def touch_item_identification_state(self):
         self.item_identification_revision += 1
@@ -1244,6 +1258,108 @@ class MainWindow(MainWindowUI):
             candidates.extend(self.find_item_price_candidates(item, price, price_kind))
         return candidates
 
+    def find_manual_shop_price_candidates(self, category, price, price_kind):
+        candidates = []
+        seen = set()
+        price_kinds = ("buy", "sell") if price_kind == "manual" else (price_kind,)
+        for target_price_kind in price_kinds:
+            for candidate in self.find_shop_price_candidates(category, price, target_price_kind):
+                item, detail, price_state = candidate
+                key = (id(item), detail, price_state)
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(candidate)
+        return candidates
+
+    def current_manual_shop_price(self):
+        text = self.manual_shop_price_edit.text().strip().replace(",", "")
+        if not text:
+            return None
+        try:
+            return int(text)
+        except ValueError:
+            return None
+
+    def current_manual_shop_price_kind(self):
+        checked = self.manual_shop_price_kind_group.checkedButton()
+        if not checked:
+            return "manual"
+        return checked.property("price_kind") or "manual"
+
+    def manual_shop_result(self, category, price, price_kind, name=""):
+        category_label = ITEM_CATEGORY_LABELS.get(category, category)
+        item_text = name.strip() or f"手動サーチ: {category_label}"
+        return SimpleNamespace(
+            item_text=item_text,
+            price=price,
+            price_kind=price_kind,
+            manual=True,
+            raw_texts=[],
+        )
+
+    def update_manual_shop_price_search(self):
+        if not self.manual_shop_category_combo or not self.manual_shop_price_edit:
+            return
+
+        category = self.manual_shop_category_combo.currentData()
+        price = self.current_manual_shop_price()
+        price_kind = self.current_manual_shop_price_kind()
+        if not category or price is None:
+            self.hide_shop_price_state()
+            return
+
+        candidates = self.find_manual_shop_price_candidates(category, price, price_kind)
+        result = self.manual_shop_result(category, price, price_kind, self.manual_shop_name_edit.text())
+        self.broadcast_shop_price_state(result, category, candidates)
+        items = [candidate[0] for candidate in candidates]
+        self.select_items_in_table(category, items)
+
+        price_kind_label = self.manual_shop_price_kind_label(price_kind)
+        category_label = ITEM_CATEGORY_LABELS.get(category, category)
+        if candidates:
+            names = [self.format_shop_candidate(candidate) for candidate in candidates]
+            preview = "、".join(names[:8])
+            suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
+            self.statusBar().showMessage(
+                f"手動サーチ候補: {category_label} {price_kind_label}{price}G -> {preview}{suffix}",
+                8000,
+            )
+        else:
+            self.statusBar().showMessage(f"手動サーチ候補なし: {category_label} {price_kind_label}{price}G", 5000)
+
+    def add_manual_shop_candidate(self):
+        category = self.manual_shop_category_combo.currentData()
+        price = self.current_manual_shop_price()
+        price_kind = self.current_manual_shop_price_kind()
+        name = self.manual_shop_name_edit.text().strip()
+        if not category or price is None:
+            self.statusBar().showMessage("カテゴリと値段を入力してください", 3000)
+            return
+
+        candidates = self.find_manual_shop_price_candidates(category, price, price_kind)
+        result = self.manual_shop_result(category, price, price_kind, name)
+        self.broadcast_shop_price_state(result, category, candidates)
+        items = [candidate[0] for candidate in candidates]
+        self.select_items_in_table(category, items)
+
+        if name and candidates:
+            self.remember_shop_price_candidates(result, category, candidates)
+            self.manual_shop_price_edit.clear()
+            self.manual_shop_name_edit.clear()
+            self.statusBar().showMessage(f"識別候補に追加しました: {name}", 4000)
+        elif name:
+            self.statusBar().showMessage(f"追加できる候補がありません: {name}", 4000)
+        else:
+            self.statusBar().showMessage("未識別名を入力すると識別候補に追加できます", 4000)
+
+    def manual_shop_price_kind_label(self, price_kind):
+        if price_kind == "buy":
+            return "買値"
+        if price_kind == "sell":
+            return "売値"
+        return "価格"
+
     def remember_shop_price_candidates(self, result, category, candidates):
         if category in ("buki", "tate") or not candidates:
             return
@@ -1379,7 +1495,14 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state()
             return
 
-        price_label = "買取価格" if result.price_kind == "sell" else "販売価格"
+        if getattr(result, "manual", False):
+            price_label = "買値/売値"
+            if result.price_kind == "buy":
+                price_label = "買値"
+            elif result.price_kind == "sell":
+                price_label = "売値"
+        else:
+            price_label = "買取価格" if result.price_kind == "sell" else "販売価格"
         category_label = ITEM_CATEGORY_LABELS.get(category, category or "判定不可")
         self.shop_price_visible = True
         self.last_shop_price_visible_time = time.monotonic()
