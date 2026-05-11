@@ -119,6 +119,10 @@ OBS側で```ツール->WebSocketサーバ設定```を開き、以下の状態に
 メイン画面の右下に```OBS: 接続中```と表示されていればOKです。
 <img width="115" alt="Image" src="https://github.com/user-attachments/assets/bf67b329-0bef-4ddb-9e63-bf050e506a1a" />
 
+## 4. OBSにおける情報表示の設定
+```template\overlay.html```をOBSにドラッグ&ドロップする。  
+ゲーム画面を適切な大きさに調整する。
+
 # 主な操作方法
 ## 共通部分
 ダンジョンのコンボボックスより、対象とするダンジョンを選択できます。
