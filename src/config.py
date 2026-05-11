@@ -28,7 +28,7 @@ class Config:
         self.config_file = config_file
 
         # OBS WebSocket
-        self.obs_enabled = True
+        self.obs_enabled = False
         self.websocket_host = "localhost"
         self.websocket_port = 4444
         self.websocket_password = ""
@@ -37,16 +37,16 @@ class Config:
         self.main_window_geometry = None
         self.main_window_x = 100
         self.main_window_y = 100
-        self.main_window_width = 500
-        self.main_window_height = 300
+        self.main_window_width = 700
+        self.main_window_height = 500
         self.keep_on_top = False
-        self.main_font_size = 10
+        self.main_font_size = 12
 
         # OBS自動制御
         self.obs_control_settings = []
         self.monitor_source_name = ""
         self.obs_scene_collection = ""
-        self.obs_capture_interval_seconds = 3.0
+        self.obs_capture_interval_seconds = 1.0
 
         # 画像保存
         self.image_save_path = "captures"
