@@ -975,6 +975,7 @@ class MainWindow(MainWindowUI):
             category, item = exact
             if category in ("buki", "tate"):
                 candidates = self.find_item_price_candidates(item, result.price, result.price_kind)
+                self.broadcast_shop_price_state(result, category, candidates, exact_item=item)
                 logger.info(
                     "店OCR: 識別済み装備品価格候補 category=%s kind=%s price=%s candidates=%s",
                     category,
@@ -1007,6 +1008,7 @@ class MainWindow(MainWindowUI):
                 item.name,
                 item.get,
             )
+            self.broadcast_shop_price_state(result, category, [(item, "", "")], exact_item=item)
             item.get = True
             self.update_item_tables()
             self.select_items_in_table(category, [item])
@@ -1022,10 +1024,12 @@ class MainWindow(MainWindowUI):
                 result.price,
                 result.price_kind,
             )
+            self.broadcast_shop_price_state(result, None, [])
             self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
             return
 
         candidates = self.find_shop_price_candidates(category, result.price, result.price_kind)
+        self.broadcast_shop_price_state(result, category, candidates)
         logger.info(
             "店OCR: 価格候補 category=%s kind=%s price=%s candidates=%s",
             category,
@@ -1177,6 +1181,38 @@ class MainWindow(MainWindowUI):
         item, detail, price_state = candidate
         price_state_text = f"({price_state})" if price_state else ""
         return f"{item.name}{detail}{price_state_text}"
+
+    def shop_candidate_payload(self, candidate):
+        item, detail, price_state = candidate
+        return {
+            "name": item.name,
+            "category": item.category.name,
+            "category_label": ITEM_CATEGORY_LABELS.get(item.category.name, item.category.ja),
+            "buy": item.buy,
+            "sell": item.sell,
+            "detail": detail,
+            "price_state": price_state,
+            "label": self.format_shop_candidate(candidate),
+        }
+
+    def broadcast_shop_price_state(self, result, category, candidates, exact_item=None):
+        if not self.websocket_server:
+            return
+
+        price_label = "買取価格" if result.price_kind == "sell" else "販売価格"
+        category_label = ITEM_CATEGORY_LABELS.get(category, category or "判定不可")
+        self.websocket_server.update_shop_price_data({
+            "item_text": result.item_text,
+            "price": result.price,
+            "price_kind": result.price_kind,
+            "price_label": price_label,
+            "category": category,
+            "category_label": category_label,
+            "exact_item": exact_item.name if exact_item else "",
+            "raw_texts": list(result.raw_texts),
+            "candidates": [self.shop_candidate_payload(candidate) for candidate in candidates],
+            "updated_at": datetime.datetime.now().strftime("%H:%M:%S"),
+        })
 
     def select_items_in_table(self, category, items):
         table = self.item_tables.get(category)

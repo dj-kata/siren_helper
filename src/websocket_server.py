@@ -42,6 +42,7 @@ class DataWebSocketServer:
         self.today_stats_data = None
         self.capture_data = None
         self.monster_floor_data = None
+        self.shop_price_data = None
         
     async def register_client(self, websocket):
         """クライアントを登録し、最新データを送信"""
@@ -83,6 +84,11 @@ class DataWebSocketServer:
             await websocket.send(json.dumps({
                 'type': 'monster_floor',
                 'data': self.monster_floor_data
+            }))
+        if self.shop_price_data:
+            await websocket.send(json.dumps({
+                'type': 'shop_price',
+                'data': self.shop_price_data
             }))
     
     async def unregister_client(self, websocket):
@@ -200,6 +206,19 @@ class DataWebSocketServer:
                 *[client.send(message) for client in self.clients],
                 return_exceptions=True
             )
+
+    async def broadcast_shop_price_data(self, data: dict):
+        """店価格識別候補データをブロードキャスト"""
+        self.shop_price_data = data
+        if self.clients:
+            message = json.dumps({
+                'type': 'shop_price',
+                'data': data
+            })
+            await asyncio.gather(
+                *[client.send(message) for client in self.clients],
+                return_exceptions=True
+            )
     
     def start(self, loop=None):
         """サーバーを開始（非同期）"""
@@ -292,6 +311,14 @@ class DataWebSocketServer:
         if self.loop:
             asyncio.run_coroutine_threadsafe(
                 self.broadcast_monster_floor_data(data),
+                self.loop
+            )
+
+    def update_shop_price_data(self, data: dict):
+        """店価格識別候補データを更新（同期メソッド）"""
+        if self.loop:
+            asyncio.run_coroutine_threadsafe(
+                self.broadcast_shop_price_data(data),
                 self.loop
             )
 

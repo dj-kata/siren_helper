@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Price Candidates</title>
+<style>
+:root {
+  --bg: rgba(0, 0, 28, 0.78);
+  --line: rgba(255, 255, 255, 0.28);
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.72);
+  --accent: #69db7c;
+  --warn: #ffd43b;
+  --empty: #ff8787;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: "Meiryo", "Yu Gothic", sans-serif;
+  text-shadow:
+    4px 4px 0 #000,
+    -1px 1px 0 #000,
+    1px -1px 0 #000,
+    -1px -1px 0 #000;
+}
+
+.overlay {
+  width: 100vw;
+  min-height: 100vh;
+  padding: 14px 16px;
+  background: var(--bg);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--line);
+}
+
+.title {
+  min-width: 0;
+}
+
+.item {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.price {
+  flex-shrink: 0;
+  color: var(--warn);
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #db3d44;
+  box-shadow: 0 0 8px #db3d44;
+}
+
+.status-dot.connected {
+  background: #3ddc84;
+  box-shadow: 0 0 8px #3ddc84;
+}
+
+.candidates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 14px;
+  margin-top: 14px;
+}
+
+.candidate {
+  min-width: 0;
+  padding: 7px 10px;
+  border-left: 6px solid var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+
+.candidate-name {
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-detail {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.empty {
+  margin-top: 18px;
+  color: var(--empty);
+  font-size: 30px;
+  font-weight: 900;
+}
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 10px;
+  }
+
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .item,
+  .price {
+    font-size: 28px;
+  }
+
+  .candidates {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+<main class="overlay">
+  <section class="header">
+    <div class="title">
+      <div class="item" id="item">価格識別待ち</div>
+      <div class="meta" id="meta">買取価格表示で更新されます</div>
+    </div>
+    <div class="price" id="price">--</div>
+  </section>
+  <div class="status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">WebSocket接続待ち</span>
+  </div>
+  <section class="candidates" id="candidates"></section>
+  <div class="empty" id="empty"></div>
+</main>
+
+<script>
+const params = new URLSearchParams(location.search);
+const host = params.get("host") || location.hostname || "localhost";
+const port = params.get("port") || "8765";
+const item = document.getElementById("item");
+const meta = document.getElementById("meta");
+const price = document.getElementById("price");
+const candidates = document.getElementById("candidates");
+const empty = document.getElementById("empty");
+const statusDot = document.getElementById("status-dot");
+const statusText = document.getElementById("status-text");
+let reconnectTimer = null;
+
+function connect() {
+  clearTimeout(reconnectTimer);
+  const socket = new WebSocket(`ws://${host}:${port}`);
+
+  socket.addEventListener("open", () => {
+    statusDot.classList.add("connected");
+    statusText.textContent = "接続中";
+  });
+
+  socket.addEventListener("message", (event) => {
+    let message = null;
+    try {
+      message = JSON.parse(event.data);
+    } catch (_error) {
+      return;
+    }
+    if (message.type === "shop_price") {
+      render(message.data || {});
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    statusDot.classList.remove("connected");
+    statusText.textContent = "再接続待ち";
+    reconnectTimer = setTimeout(connect, 1500);
+  });
+
+  socket.addEventListener("error", () => {
+    socket.close();
+  });
+}
+
+function render(data) {
+  const candidateList = data.candidates || [];
+  const priceText = Number.isFinite(data.price) ? data.price.toLocaleString("ja-JP") : "--";
+  item.textContent = data.item_text || "価格識別待ち";
+  meta.textContent = `${data.category_label || "判定不可"} / ${data.price_label || "価格"} / ${data.updated_at || "--:--:--"}`;
+  price.textContent = `${priceText}G`;
+  candidates.replaceChildren();
+  empty.textContent = "";
+
+  if (candidateList.length === 0) {
+    empty.textContent = "候補なし";
+    return;
+  }
+
+  for (const candidate of candidateList) {
+    candidates.appendChild(createCandidate(candidate, data.price_kind));
+  }
+}
+
+function createCandidate(candidate, priceKind) {
+  const node = document.createElement("article");
+  node.className = "candidate";
+
+  const name = document.createElement("div");
+  name.className = "candidate-name";
+  name.textContent = candidate.label || candidate.name || "";
+  node.appendChild(name);
+
+  const detail = document.createElement("div");
+  detail.className = "candidate-detail";
+  const basePrice = priceKind === "sell" ? candidate.sell : candidate.buy;
+  const label = priceKind === "sell" ? "売値" : "買値";
+  detail.textContent = `${candidate.category_label || ""} ${label}${Number(basePrice || 0).toLocaleString("ja-JP")}G`;
+  node.appendChild(detail);
+
+  return node;
+}
+
+connect();
+</script>
+</body>
+</html>
