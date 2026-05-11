@@ -74,6 +74,7 @@ class UIText:
         autoload_offset = '自動読み込みオフセット:'
         websocket_port = 'データ表示用port:'
         obs_enabled = 'OBS連携を有効にする'
+        obs_capture_interval = 'OBS画面取得間隔:'
         keep_on_top = '常に最前面表示する'
         main_font_size = 'メイン画面のフォントサイズ:'
     
