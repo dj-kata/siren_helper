@@ -65,7 +65,12 @@ build_exe_options = {
         "PySide6.QtWidgets",
         "obsws_python",  # OBS WebSocket連携に必要
         "websocket",     # obsws_pythonの依存関係（websocket-client）
-        "http",
+        "websockets",
+        "requests",
+        "packaging",
+        "cv2",
+        "onnxocr",
+        "onnxruntime",
         "PIL",
         "numpy",
         "imagehash",
@@ -101,7 +106,6 @@ build_exe_options = {
         "src.funcs",
         "src.logger",
         "src.obs_control",
-        "src.screen_reader",
         "src.config_dialog",
         "src.obs_dialog",
         "src.shop_ocr",
@@ -133,9 +137,6 @@ build_exe_options = {
         "pandas",
         "test",
         "unittest",
-        "email",
-        "html",
-        "http",
         # "urllib",
         # "xml",
         # "pydoc",
@@ -158,7 +159,6 @@ build_exe_options = {
         "PySide6.QtDataVisualization",
         # obsws_pythonの存在しないサブモジュール（エラー回避）
         "obsws_python.requests",
-        "obsws_python.events",
         # infnotebookはpackagesに含めていないので、excludes不要
     ],
     
@@ -200,12 +200,13 @@ executables = [
         shortcut_name="siren6_helper",
         shortcut_dir="DesktopFolder",
     ),
-    Executable(
-        script="siren6_helper.pyw",
-        base=None,
-        target_name="siren6_helper_debug.exe" if sys.platform == "win32" else "siren6HelperDebug",
-        icon='src/icon.ico',
-    ),
+    # デバッグ時だけコメントを外す（コンソール付きexe）
+    # Executable(
+    #     script="siren6_helper.pyw",
+    #     base=None,
+    #     target_name="siren6_helper_debug.exe" if sys.platform == "win32" else "siren6HelperDebug",
+    #     icon='src/icon.ico',
+    # ),
 ]
 
 # セットアップ

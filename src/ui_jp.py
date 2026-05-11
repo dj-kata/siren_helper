@@ -236,12 +236,6 @@ class UIText:
         '''OBS制御設定におけるタイミング'''
         app_start = "アプリ起動時"
         app_end = "アプリ終了時"
-        select_start = "画面A開始時"
-        select_end = "画面A終了時"
-        play_start = "対戦画面開始時"
-        play_end = "対戦画面終了時"
-        result_start = "画面B開始時"
-        result_end = "画面B終了時"
 
     class obs_action:
         '''OBS制御設定におけるアクション'''

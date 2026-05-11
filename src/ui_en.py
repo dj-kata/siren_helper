@@ -235,12 +235,6 @@ class UIText:
         '''timing for obs control settings'''
         app_start = "app start"
         app_end = "app exit"
-        select_start = "screen A start"
-        select_end = "screen A end"
-        play_start = "battle screen start"
-        play_end = "battle screen end"
-        result_start = "screen B start"
-        result_end = "screen B end"
 
     class obs_action:
         '''action for obs control settings'''

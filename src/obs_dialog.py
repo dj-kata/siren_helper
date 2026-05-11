@@ -40,17 +40,12 @@ class OBSControlDialog(QDialog):
 
     def set_defines(self):
         '''列で使う項目名をセットする'''
-        # 実行タイミングの定義(既存コードと同じ)
+        # 実行タイミングの定義
         self.TIMINGS = [
             ("app_start"   , self.ui.obs_timing.app_start),
             ("app_end"     , self.ui.obs_timing.app_end),
-            ("select_start", self.ui.obs_timing.select_start),
-            ("select_end"  , self.ui.obs_timing.select_end),
-            ("play_start"  , self.ui.obs_timing.play_start),
-            ("play_end"    , self.ui.obs_timing.play_end),
-            ("result_start", self.ui.obs_timing.result_start),
-            ("result_end"  , self.ui.obs_timing.result_end),
         ]
+        self.TIMING_IDS = {timing_id for timing_id, _ in self.TIMINGS}
     
         # アクションの定義(既存コードと同じ)
         self.ACTIONS = [
@@ -592,6 +587,8 @@ class OBSControlDialog(QDialog):
             # 監視対象ソース設定はスキップ(画面上部のラベルのみに表示)
             if action_id == "set_monitor_source":
                 continue
+            if timing_id not in self.TIMING_IDS:
+                continue
             
             timing_name = timing_dict.get(timing_id, timing_id)
             action_name = action_dict.get(action_id, action_id)
@@ -655,6 +652,14 @@ class OBSControlDialog(QDialog):
         # シーンコレクション設定を保存
         selected_collection = self.scene_collection_combo.currentData()
         self.config.obs_scene_collection = selected_collection if selected_collection else ""
+
+        # 現在対応しているOBS自動制御はアプリ起動時/終了時のみ。
+        self.config.obs_control_settings = [
+            setting
+            for setting in self.config.obs_control_settings
+            if setting.get("action") == "set_monitor_source"
+            or setting.get("timing") in self.TIMING_IDS
+        ]
 
         self.config.save_config()
         logger.info("OBS制御設定を保存しました")

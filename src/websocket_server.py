@@ -12,6 +12,7 @@ import warnings
 # asyncio関連の警告を抑制
 warnings.filterwarnings('ignore', category=RuntimeWarning, message='coroutine.*was never awaited')
 warnings.filterwarnings('ignore', category=RuntimeWarning, message='Enable tracemalloc.*')
+logging.getLogger("websockets.server").setLevel(logging.CRITICAL)
 
 # ロガーの設定（src.loggerがない場合のフォールバック）
 try:
