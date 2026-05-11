@@ -916,6 +916,16 @@ class MainWindow(MainWindowUI):
         if dungeon_index < 0:
             return
 
+        previous_floor = self.current_monster_floor()
+        auto_reset = floor < previous_floor
+        if auto_reset:
+            logger.info(
+                "階層低下を検出したため自動リセットします: %sF -> %sF",
+                previous_floor,
+                floor,
+            )
+            self.reset_identification()
+
         changed = False
         if self.dungeon_combo.currentData() != dungeon_key:
             self.dungeon_combo.setCurrentIndex(dungeon_index)
@@ -929,7 +939,13 @@ class MainWindow(MainWindowUI):
             self.monster_floor_combo.setCurrentIndex(floor_index)
             changed = True
 
-        if changed:
+        if auto_reset:
+            dungeon_name = self.dungeon_combo.currentText()
+            self.statusBar().showMessage(
+                f"階層低下を検出して自動リセットしました: {dungeon_name} {floor}F",
+                3000,
+            )
+        elif changed:
             dungeon_name = self.dungeon_combo.currentText()
             self.statusBar().showMessage(f"OCRで更新しました: {dungeon_name} {floor}F", 3000)
 
