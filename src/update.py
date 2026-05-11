@@ -56,7 +56,7 @@ class GitHubUpdater:
         # self.ico=self.ico_path('icon.ico')
         ret = None
         url = f'https://github.com/{self.github_author}/{self.github_repo}/tags'
-        r = requests.get(url)
+        r = requests.get(url, timeout=5)
         soup = BeautifulSoup(r.text,features="html.parser")
         for tag in soup.find_all('a'):
             if 'releases/tag/' in tag['href']:

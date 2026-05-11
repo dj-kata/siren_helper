@@ -9,6 +9,7 @@ from PySide6.QtCore import QByteArray
 from PySide6.QtGui import QAction, QActionGroup
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -288,6 +289,20 @@ class MainWindowUI(QMainWindow):
                 self.config.main_window_width,
                 self.config.main_window_height,
             )
+        self.ensure_window_visible()
+
+    def ensure_window_visible(self):
+        frame = self.frameGeometry()
+        screens = QApplication.screens()
+        if any(screen.availableGeometry().intersects(frame) for screen in screens):
+            return
+
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        available = screen.availableGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def save_window_geometry(self):
         geometry_str = base64.b64encode(self.saveGeometry().data()).decode("ascii")

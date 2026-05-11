@@ -16,4 +16,5 @@ dependencies = [
     "requests>=2.33.1",
     "bs4>=0.0.2",
     "paddleocr>=3.5.0",
+    "cx-freeze>=8.6.4",
 ]

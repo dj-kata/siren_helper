@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from enum import Enum
 import json
+import sys
 from pathlib import Path
 
 class item_category(Enum):
@@ -76,7 +77,11 @@ class Tubo(Item):
         print(f"{self.name}[{self.capa_min}-{self.capa_max}] {str_demerit}({self.category.ja}), 買値:{self.buy:,}-{self.buy_max:,}, 売値:{self.sell:,}-{self.sell_max:,}")
 
 class ItemList:
-    data_path = Path(__file__).resolve().parent.parent / "data" / "6_items.json"
+    data_path = (
+        Path(sys.executable).resolve().parent / "data" / "6_items.json"
+        if getattr(sys, "frozen", False)
+        else Path(__file__).resolve().parent.parent / "data" / "6_items.json"
+    )
     category_json_keys = {
         "kusa": "kusa_tane",
         "makimono": "makimono",

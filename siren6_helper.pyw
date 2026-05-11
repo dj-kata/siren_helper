@@ -15,9 +15,28 @@ import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
+if getattr(sys, "frozen", False):
+    os.chdir(Path(sys.executable).resolve().parent)
+
+
+def startup_trace(message):
+    if not getattr(sys, "frozen", False):
+        return
+    try:
+        log_dir = Path("log")
+        log_dir.mkdir(exist_ok=True)
+        with (log_dir / "startup_trace.log").open("a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {message}\n")
+    except Exception:
+        pass
+
+
+startup_trace("start")
+
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+startup_trace("imported PySide6")
 
 try:
     import keyboard
@@ -26,22 +45,43 @@ try:
 except ImportError:
     KEYBOARD_AVAILABLE = False
     print("警告: keyboardライブラリがインストールされていません。グローバルホットキーは無効です。")
+startup_trace("imported keyboard")
 
 from src.config import Config
+startup_trace("imported src.config")
 from src.config_dialog import ConfigDialog
+startup_trace("imported src.config_dialog")
 from src.dungeon_ocr import DungeonOcrReader
 from src.dungeon_ocr import normalize_ocr_text
+startup_trace("imported src.dungeon_ocr")
 from src.funcs import escape_for_filename
+startup_trace("imported src.funcs")
 from src.item import ItemList
+startup_trace("imported src.item")
 from src.logger import get_logger
+startup_trace("imported src.logger")
 from src.main_window import MainWindowUI
+startup_trace("imported src.main_window")
 from src.obs_dialog import OBSControlDialog
+startup_trace("imported src.obs_dialog")
 from src.obs_websocket_manager import OBSWebSocketManager
+startup_trace("imported src.obs_websocket_manager")
 from src.shop_ocr import ShopOcrReader
-from src.update import GitHubUpdater
+startup_trace("imported src.shop_ocr")
 from src.websocket_server import DataWebSocketServer
+startup_trace("imported src.websocket_server")
 
 logger = get_logger("new_siren6_helper")
+startup_trace("created logger")
+
+
+def write_fatal_error(exc):
+    log_dir = Path("log")
+    log_dir.mkdir(exist_ok=True)
+    with (log_dir / "fatal_error.log").open("a", encoding="utf-8") as f:
+        f.write(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {exc}\n")
+        f.write(traceback.format_exc())
+        f.write("\n")
 
 try:
     with open("version.txt", "r", encoding="utf-8") as f:
@@ -198,9 +238,7 @@ class MainWindow(MainWindowUI):
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
         if self.config.obs_enabled:
-            self.obs_manager.connect()
-            QTimer.singleShot(1000, self.check_obs_configuration)
-            self.execute_obs_triggers("app_start")
+            QTimer.singleShot(0, self.start_obs_connection)
         else:
             self.update_obs_status_label(False)
 
@@ -219,6 +257,11 @@ class MainWindow(MainWindowUI):
     @property
     def start_time(self) -> int:
         return self._start_time
+
+    def start_obs_connection(self):
+        self.obs_manager.connect()
+        QTimer.singleShot(1000, self.check_obs_configuration)
+        self.execute_obs_triggers("app_start")
 
     def start_websocket_server(self):
         """画面取得状態を外部へ配信するWebSocketサーバーを開始"""
@@ -1476,23 +1519,49 @@ class MainWindow(MainWindowUI):
 
 def main():
     app = QApplication(sys.argv)
+    startup_trace("created QApplication")
     app.setStyle("Fusion")
+    startup_trace("set app style")
 
     window = MainWindow()
+    startup_trace("created MainWindow")
     window.setWindowIcon(QIcon("src/icon.ico"))
+    startup_trace("set window icon")
     window.show()
+    startup_trace("showed MainWindow")
+    QTimer.singleShot(1000, check_for_updates_on_start)
+    startup_trace("scheduled update check")
 
     sys.exit(app.exec())
 
 
+def check_for_updates_on_start():
+    try:
+        from src.update import GitHubUpdater
+        startup_trace("imported src.update")
+
+        updater = GitHubUpdater(
+            github_author="dj-kata",
+            github_repo="siren5_helper",
+            zipfile_basename="siren6_helper",
+            current_version=SWVER,
+            main_exe_name="siren6_helper.exe",
+            updator_exe_name="siren6_helper.exe",
+        )
+        updater.check_and_update()
+    except Exception as exc:
+        logger.error(f"アップデート確認エラー: {traceback.format_exc()}")
+        write_fatal_error(exc)
+
+
 if __name__ == "__main__":
-    updater = GitHubUpdater(
-        github_author="dj-kata",
-        github_repo="siren5_helper",
-        zipfile_basename="siren6_helper",
-        current_version=SWVER,
-        main_exe_name="siren6_helper.exe",
-        updator_exe_name="siren6_helper.exe",
-    )
-    updater.check_and_update()
-    main()
+    try:
+        main()
+    except Exception as exc:
+        write_fatal_error(exc)
+        try:
+            app = QApplication.instance() or QApplication(sys.argv)
+            QMessageBox.critical(None, "Siren 6 Helper 起動エラー", f"{exc}\n\n詳細は log/fatal_error.log を確認してください。")
+        except Exception:
+            pass
+        raise
