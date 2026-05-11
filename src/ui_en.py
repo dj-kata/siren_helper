@@ -74,6 +74,7 @@ class UIText:
         autoload_offset = 'Auto-load offset:'
         websocket_port = 'Data display port:'
         obs_enabled = 'Enable OBS integration'
+        obs_capture_interval = 'OBS capture interval:'
         keep_on_top = 'Always on Top'
         main_font_size = 'Main window font size:'
     

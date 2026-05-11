@@ -14,6 +14,13 @@ def clamp_int(value, default, minimum, maximum):
         return default
 
 
+def clamp_float(value, default, minimum, maximum):
+    try:
+        return min(max(float(value), minimum), maximum)
+    except (TypeError, ValueError):
+        return default
+
+
 class Config:
     """アプリ設定を管理するクラス"""
 
@@ -39,6 +46,7 @@ class Config:
         self.obs_control_settings = []
         self.monitor_source_name = ""
         self.obs_scene_collection = ""
+        self.obs_capture_interval_seconds = 3.0
 
         # 画像保存
         self.image_save_path = "captures"
@@ -83,6 +91,12 @@ class Config:
             self.obs_control_settings = config_data.get("obs_control_settings", self.obs_control_settings)
             self.monitor_source_name = config_data.get("monitor_source_name", self.monitor_source_name)
             self.obs_scene_collection = config_data.get("obs_scene_collection", self.obs_scene_collection)
+            self.obs_capture_interval_seconds = clamp_float(
+                config_data.get("obs_capture_interval_seconds", self.obs_capture_interval_seconds),
+                self.obs_capture_interval_seconds,
+                1.0,
+                30.0,
+            )
             self.image_save_path = config_data.get("image_save_path", self.image_save_path)
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.language = config_data.get("language", self.language)
@@ -109,6 +123,7 @@ class Config:
             "obs_control_settings": self.obs_control_settings,
             "monitor_source_name": self.monitor_source_name,
             "obs_scene_collection": self.obs_scene_collection,
+            "obs_capture_interval_seconds": self.obs_capture_interval_seconds,
             "image_save_path": self.image_save_path,
             "websocket_data_port": self.websocket_data_port,
             "language": self.language,

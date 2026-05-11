@@ -15,7 +15,6 @@ import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
-import imagehash
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
@@ -53,9 +52,10 @@ except Exception:
 
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
 STAT_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue"]
-SCREEN_HASH_SIZE = 16
-SCREEN_HASH_MAX_DISTANCE = 3
 MIN_IDENTIFIED_ITEM_MATCH_SCORE = 0.82
+EQUIPMENT_PRICE_CORRECTION_MAX = 99
+EQUIPMENT_BUY_CORRECTION_UNIT = 100
+EQUIPMENT_SELL_CORRECTION_UNIT = 40
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
     "makimono": "巻物",
@@ -161,10 +161,8 @@ class MainWindow(MainWindowUI):
         self.last_capture_time = None
         self.capture_status = self.ui.main.waiting_capture
         self.latest_screen = None
-        self.last_screen_hash = None
-        self.is_screen_skip_logged = False
         self.last_capture_attempt_time = 0.0
-        self.capture_interval = 1.0
+        self.capture_interval = self.config.obs_capture_interval_seconds
         self.dungeon_ocr_reader = DungeonOcrReader()
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 5.0
@@ -275,6 +273,7 @@ class MainWindow(MainWindowUI):
         old_obs_enabled = self.config.obs_enabled
         self.config.load_config()
         self.obs_manager.set_config(self.config)
+        self.capture_interval = self.config.obs_capture_interval_seconds
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
         self.apply_main_font()
@@ -810,6 +809,10 @@ class MainWindow(MainWindowUI):
                 self.capture_status = self.ui.main.waiting_capture
                 return
 
+            with self.capture_worker_lock:
+                if self.capture_worker_running:
+                    return
+
             now = time.monotonic()
             if now - self.last_capture_attempt_time < self.capture_interval:
                 return
@@ -836,7 +839,6 @@ class MainWindow(MainWindowUI):
         result = {
             "screen": None,
             "capture_failed": False,
-            "skipped": False,
             "dungeon_result": None,
             "shop_result": None,
         }
@@ -847,23 +849,6 @@ class MainWindow(MainWindowUI):
                 return
 
             screen = self.obs_manager.screen
-            screen_hash = self.calc_screen_hash(screen)
-            screen_hash_distance = self.calc_screen_hash_distance(screen_hash)
-            if screen_hash_distance is not None and screen_hash_distance <= SCREEN_HASH_MAX_DISTANCE:
-                self.last_screen_hash = screen_hash
-                if not self.is_screen_skip_logged:
-                    logger.debug(
-                        "画面変化なしのためメインループ処理をスキップ hash=%s distance=%s threshold=%s",
-                        screen_hash,
-                        screen_hash_distance,
-                        SCREEN_HASH_MAX_DISTANCE,
-                    )
-                    self.is_screen_skip_logged = True
-                result["skipped"] = True
-                return
-            self.last_screen_hash = screen_hash
-            self.is_screen_skip_logged = False
-
             result["screen"] = screen
             result["dungeon_result"] = self.read_dungeon_from_screen(screen)
             result["shop_result"] = self.read_shop_from_screen(screen)
@@ -871,15 +856,11 @@ class MainWindow(MainWindowUI):
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
         finally:
             self.capture_processed.emit(result)
-            with self.capture_worker_lock:
-                self.capture_worker_running = False
 
     def on_capture_processed(self, result):
         try:
             if result.get("capture_failed"):
                 self.capture_status = self.ui.main.capture_failed
-                return
-            if result.get("skipped"):
                 return
 
             screen = result.get("screen")
@@ -901,14 +882,9 @@ class MainWindow(MainWindowUI):
             self.broadcast_capture_state()
         except Exception:
             logger.error(f"画面取得/OCR結果反映エラー: {traceback.format_exc()}")
-
-    def calc_screen_hash(self, screen):
-        return imagehash.average_hash(screen, hash_size=SCREEN_HASH_SIZE)
-
-    def calc_screen_hash_distance(self, screen_hash):
-        if self.last_screen_hash is None:
-            return None
-        return screen_hash - self.last_screen_hash
+        finally:
+            with self.capture_worker_lock:
+                self.capture_worker_running = False
 
     def update_dungeon_selection_from_screen(self, screen):
         result = self.read_dungeon_from_screen(screen)
@@ -976,13 +952,12 @@ class MainWindow(MainWindowUI):
         signature = (normalize_ocr_text(result.item_text), result.price_kind, result.price)
         if signature == self.last_shop_result_signature:
             logger.info(
-                "店OCR: 同一結果のためスキップ item=%r kind=%s price=%s raw=%s",
+                "店OCR: 同一結果 item=%r kind=%s price=%s raw=%s",
                 result.item_text,
                 result.price_kind,
                 result.price,
                 result.raw_texts,
             )
-            return
         self.last_shop_result_signature = signature
         logger.info(
             "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
@@ -998,6 +973,33 @@ class MainWindow(MainWindowUI):
         exact = self.find_item_by_name(result.item_text)
         if exact:
             category, item = exact
+            if category in ("buki", "tate"):
+                candidates = self.find_item_price_candidates(item, result.price, result.price_kind)
+                logger.info(
+                    "店OCR: 識別済み装備品価格候補 category=%s kind=%s price=%s candidates=%s",
+                    category,
+                    result.price_kind,
+                    result.price,
+                    tuple(self.format_shop_candidate(candidate) for candidate in candidates),
+                )
+                self.select_items_in_table(category, [item])
+
+                price_label = "売値" if result.price_kind == "sell" else "買値"
+                if candidates:
+                    names = [self.format_shop_candidate(candidate) for candidate in candidates]
+                    preview = "、".join(names[:8])
+                    suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
+                    self.statusBar().showMessage(
+                        f"店OCR識別済: {price_label}{result.price} -> {preview}{suffix}",
+                        8000,
+                    )
+                else:
+                    self.statusBar().showMessage(
+                        f"店OCR識別済: {item.name} ({price_label}{result.price})",
+                        4000,
+                    )
+                return
+
             logger.info(
                 "店OCR: 識別済みアイテム一致 ocr=%r category=%s item=%s before_get=%s",
                 result.item_text,
@@ -1127,17 +1129,36 @@ class MainWindow(MainWindowUI):
         for item in self.get_target_items(category):
             if item.get or item.default_get:
                 continue
-            for candidate_price, detail in self.iter_item_prices(item, price_kind):
-                if candidate_price == price:
-                    candidates.append((item, detail, False))
-                if candidate_price * 2 == price:
-                    candidates.append((item, detail, True))
+            candidates.extend(self.find_item_price_candidates(item, price, price_kind))
+        return candidates
+
+    def find_item_price_candidates(self, item, price, price_kind):
+        candidates = []
+        for candidate_price, detail in self.iter_item_prices(item, price_kind):
+            if candidate_price == price:
+                candidates.append((item, detail, ""))
+            if candidate_price * 2 == price:
+                candidates.append((item, detail, "祝福"))
+            if candidate_price * 87 // 100 == price:
+                candidates.append((item, detail, "呪い"))
         return candidates
 
     def iter_item_prices(self, item, price_kind):
         attr = "sell" if price_kind == "sell" else "buy"
         unit_attr = "sell_unit" if price_kind == "sell" else "buy_unit"
         base = getattr(item, attr, 0)
+        if item.category.name in ("buki", "tate"):
+            unit = EQUIPMENT_SELL_CORRECTION_UNIT if price_kind == "sell" else EQUIPMENT_BUY_CORRECTION_UNIT
+            correction_min = -self.get_equipment_base_power(item)
+            for correction in range(correction_min, EQUIPMENT_PRICE_CORRECTION_MAX + 1):
+                price = base + unit * correction
+                if price <= 0:
+                    continue
+                sign = "+" if correction > 0 else ""
+                detail = f"{sign}{correction}" if correction else ""
+                yield price, detail
+            return
+
         unit = getattr(item, unit_attr, None)
         if unit is None:
             yield base, ""
@@ -1146,10 +1167,16 @@ class MainWindow(MainWindowUI):
         for capacity in range(item.capa_min, item.capa_max + 1):
             yield base + unit * capacity, f"[{capacity}]"
 
+    def get_equipment_base_power(self, item):
+        try:
+            return max(0, int(item.raw_data.get("基礎値", 0)))
+        except (TypeError, ValueError):
+            return 0
+
     def format_shop_candidate(self, candidate):
-        item, detail, blessed = candidate
-        blessed_text = "(祝福)" if blessed else ""
-        return f"{item.name}{detail}{blessed_text}"
+        item, detail, price_state = candidate
+        price_state_text = f"({price_state})" if price_state else ""
+        return f"{item.name}{detail}{price_state_text}"
 
     def select_items_in_table(self, category, items):
         table = self.item_tables.get(category)
@@ -1242,13 +1269,15 @@ class MainWindow(MainWindowUI):
     def closeEvent(self, event):
         self.execute_obs_triggers("app_end")
         self.remove_global_hotkeys()
+        self.main_timer.stop()
+        self.display_timer.stop()
+        if self.capture_worker and self.capture_worker.is_alive():
+            self.capture_worker.join(timeout=3.0)
         if self.config.obs_enabled:
             self.obs_manager.disconnect()
         self.save_identification_settings()
         self.save_window_geometry()
 
-        self.main_timer.stop()
-        self.display_timer.stop()
         self.stop_websocket_server()
 
         logger.info("アプリケーション終了")

@@ -74,7 +74,7 @@ class ShopOcrReader:
 
         my_texts = self._read_crop(screen, PosMyItemPrice.CROP_XYWH, "PosMyItemPrice")
         logger.info("店OCR: 手持ち欄 text_count=%s", len(my_texts))
-        if len(my_texts) == 3:
+        if len(my_texts) >= 2:
             price = extract_price(my_texts[-1].text)
             if price is not None:
                 logger.info(
