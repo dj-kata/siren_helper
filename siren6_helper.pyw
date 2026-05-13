@@ -1183,6 +1183,27 @@ class MainWindow(MainWindowUI):
             self.statusBar().showMessage(f"OCR識別済: {item.name}", 4000)
             return
 
+        if result.price is None:
+            logger.info(
+                "店OCR: アイテム名のみの結果がDB一致しないため破棄 ocr=%r normalized=%r kind=%s",
+                result.item_text,
+                self.normalize_item_match_text(result.item_text),
+                result.price_kind,
+            )
+            self.hide_shop_price_state()
+            return
+
+        if not getattr(result, "has_detail_text", True):
+            logger.info(
+                "店OCR: 説明文欄textなしのためDB名一致しない結果を破棄 ocr=%r normalized=%r price=%s kind=%s",
+                result.item_text,
+                self.normalize_item_match_text(result.item_text),
+                result.price,
+                result.price_kind,
+            )
+            self.hide_shop_price_state()
+            return
+
         category = self.detect_shop_item_category(result.item_text)
         if not category:
             logger.info(

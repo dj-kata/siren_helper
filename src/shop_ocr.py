@@ -25,9 +25,10 @@ class ShopOcrText:
 @dataclass(frozen=True)
 class ShopPriceResult:
     item_text: str
-    price: int
+    price: int | None
     price_kind: str
     raw_texts: tuple[str, ...]
+    has_detail_text: bool = True
 
 
 def normalize_price_text(text: str) -> str:
@@ -42,6 +43,11 @@ def extract_price(text: str) -> int | None:
         return int(match.group(0))
     except ValueError:
         return None
+
+
+def can_use_name_only_identification(text: str) -> bool:
+    normalized = normalize_price_text(text).strip()
+    return bool(normalized)
 
 
 def _box_left(box) -> float:
@@ -67,8 +73,7 @@ class ShopOcrReader:
 
         has_unknown_message, has_detail_text = self.detect_shop_message_state(screen)
         if not has_detail_text:
-            logger.info("店OCR: 説明文欄textなし")
-            return None
+            logger.info("店OCR: 説明文欄textなし。識別済みアイテム名一致確認のため価格欄OCRを継続")
         if not has_unknown_message:
             logger.info("店OCR: 未識別メッセージなし。識別済みアイテムの可能性があるため価格欄OCRを継続")
 
@@ -88,6 +93,7 @@ class ShopOcrReader:
                     price=price,
                     price_kind="sell",
                     raw_texts=tuple(text.text for text in my_texts),
+                    has_detail_text=has_detail_text,
                 )
             logger.info("店OCR: 手持ち欄の価格抽出失敗 raw=%s", tuple(text.text for text in my_texts))
 
@@ -95,27 +101,58 @@ class ShopOcrReader:
             logger.info("店OCR: 手持ち欄のtext数が想定外 raw=%s", tuple(text.text for text in my_texts))
             return None
 
+        detail_item_text = my_texts[0].text if can_use_name_only_identification(my_texts[0].text) else ""
+
         shop_texts = self._read_crop(screen, PosShopItemPrice.CROP_XYWH, "PosShopItemPrice")
         logger.info("店OCR: 店売り欄 text_count=%s", len(shop_texts))
         if len(shop_texts) != 2:
             logger.info("店OCR: 店売り欄のtext数が想定外 raw=%s", tuple(text.text for text in shop_texts))
+            if detail_item_text:
+                logger.info(
+                    "店OCR: 詳細欄アイテム名のみでDB照合 item=%r raw=%s",
+                    detail_item_text,
+                    tuple(text.text for text in my_texts),
+                )
+                return ShopPriceResult(
+                    item_text=detail_item_text,
+                    price=None,
+                    price_kind="sell",
+                    raw_texts=tuple(text.text for text in my_texts),
+                    has_detail_text=has_detail_text,
+                )
             return None
 
         price = extract_price(shop_texts[-1].text)
         if price is None:
             logger.info("店OCR: 店売り欄の価格抽出失敗 raw=%s", tuple(text.text for text in shop_texts))
+            if detail_item_text:
+                logger.info(
+                    "店OCR: 店売り欄価格抽出失敗のため詳細欄アイテム名のみでDB照合 item=%r raw=%s",
+                    detail_item_text,
+                    tuple(text.text for text in my_texts),
+                )
+                return ShopPriceResult(
+                    item_text=detail_item_text,
+                    price=None,
+                    price_kind="sell",
+                    raw_texts=tuple(text.text for text in my_texts),
+                    has_detail_text=has_detail_text,
+                )
             return None
+        item_text = detail_item_text or shop_texts[0].text
         logger.info(
-            "店OCR: 店売りアイテム判定 item=%r price=%s raw=%s",
-            shop_texts[0].text,
+            "店OCR: 店売りアイテム判定 item=%r price=%s raw=%s detail_raw=%s",
+            item_text,
             price,
             tuple(text.text for text in shop_texts),
+            tuple(text.text for text in my_texts),
         )
         return ShopPriceResult(
-            item_text=shop_texts[0].text,
+            item_text=item_text,
             price=price,
             price_kind="buy",
-            raw_texts=tuple(text.text for text in shop_texts),
+            raw_texts=tuple(text.text for text in my_texts + shop_texts),
+            has_detail_text=has_detail_text,
         )
 
     def has_shop_buy_message(self, screen) -> bool:
