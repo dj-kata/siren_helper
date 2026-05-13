@@ -128,6 +128,7 @@ ITEM_CATEGORY_LABELS = {
     "buki": "武器",
     "tate": "盾",
 }
+NON_BLESSABLE_ITEM_CATEGORIES = {"buki", "tate", "udewa", "tubo", "tue"}
 SHOP_CANDIDATE_CATEGORY_COLORS = {
     "kusa": "#e4f4dc",
     "makimono": "#fff0bf",
@@ -1338,7 +1339,7 @@ class MainWindow(MainWindowUI):
             if item.get or item.default_get:
                 continue
             candidates.extend(self.find_item_price_candidates(item, price, price_kind))
-        return candidates
+        return self.sort_shop_price_candidates(candidates)
 
     def find_manual_shop_price_candidates(self, category, price, price_kind):
         candidates = []
@@ -1352,7 +1353,7 @@ class MainWindow(MainWindowUI):
                     continue
                 seen.add(key)
                 candidates.append(candidate)
-        return candidates
+        return self.sort_shop_price_candidates(candidates)
 
     def current_manual_shop_price(self):
         text = self.manual_shop_price_edit.text().strip().replace(",", "")
@@ -1486,6 +1487,7 @@ class MainWindow(MainWindowUI):
                 for candidate in entry["candidates"]
                 if not candidate[0].get and not candidate[0].default_get
             ]
+            visible_candidates = self.sort_shop_price_candidates(visible_candidates)
             if not visible_candidates:
                 continue
             rows.append((entry["display_name"], entry["category"], visible_candidates))
@@ -1513,14 +1515,18 @@ class MainWindow(MainWindowUI):
 
     def find_item_price_candidates(self, item, price, price_kind):
         candidates = []
+        can_be_blessed = item.category.name not in NON_BLESSABLE_ITEM_CATEGORIES
         for candidate_price, detail in self.iter_item_prices(item, price_kind):
             if candidate_price == price:
                 candidates.append((item, detail, ""))
-            if candidate_price * 2 == price:
+            if can_be_blessed and candidate_price * 2 == price:
                 candidates.append((item, detail, "祝福"))
             if candidate_price * 87 // 100 == price:
                 candidates.append((item, detail, "呪い"))
-        return candidates
+        return self.sort_shop_price_candidates(candidates)
+
+    def sort_shop_price_candidates(self, candidates):
+        return sorted(candidates, key=lambda candidate: candidate[2] == "祝福")
 
     def iter_item_prices(self, item, price_kind):
         attr = "sell" if price_kind == "sell" else "buy"
