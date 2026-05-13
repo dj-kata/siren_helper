@@ -1090,11 +1090,6 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state_if_stale()
 
     def read_shop_from_screen(self, screen):
-        now = time.monotonic()
-        if now - self.last_shop_ocr_time < self.shop_ocr_interval:
-            return None
-        self.last_shop_ocr_time = now
-
         try:
             result = self.shop_ocr_reader.read(screen)
             if not result:
