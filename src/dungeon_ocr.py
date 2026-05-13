@@ -12,7 +12,7 @@ DUNGEON_INFO_CROP_XYWH = (0, 0, 500, 125)
 DEBUG_CROP_PATH = Path("log") / "dungeon_ocr_crop.png"
 MIN_DUNGEON_MATCH_SCORE = 0.72
 FLOOR_PATTERN = re.compile(r"(?<!\d)(\d{1,3})\s*(?:F|階)")
-TEXT_NOISE_PATTERN = re.compile(r"[\s・･\-_ー,，.。:：/／\\|｜()\[\]{}「」『』【】]+")
+TEXT_NOISE_PATTERN = re.compile(r"[\s・･·\-_ー,，.。:：/／\\|｜()\[\]{}「」『』【】]+")
 
 
 @dataclass(frozen=True)
