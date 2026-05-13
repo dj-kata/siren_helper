@@ -80,6 +80,7 @@ class UIText:
         capture_mode_direct = '直接取得(Steam版のみ)'
         obs_capture_interval = '画面取得間隔:'
         keep_on_top = '常に最前面表示する'
+        debug_mode = 'デバッグモード（ログファイル・OCR確認画像を出力する）'
         main_font_size = 'メイン画面のフォントサイズ:'
     
     class music_pack:

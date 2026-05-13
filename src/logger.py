@@ -1,11 +1,47 @@
 import logging
+import json
 import os
 import sys
 from logging.handlers import RotatingFileHandler
 
-# ログ保存ディレクトリの作成
 LOG_DIR = "log"
-os.makedirs(LOG_DIR, exist_ok=True)
+CONFIG_FILE = "config.json"
+_debug_logging_enabled = False
+
+
+def _read_debug_mode_from_config():
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return bool(json.load(f).get("debug_mode", False))
+    except Exception:
+        return False
+
+
+def is_debug_logging_enabled():
+    return _debug_logging_enabled
+
+
+def set_debug_logging_enabled(enabled: bool):
+    global _debug_logging_enabled
+    _debug_logging_enabled = bool(enabled)
+
+
+class DebugModeRotatingFileHandler(RotatingFileHandler):
+    def emit(self, record):
+        if not is_debug_logging_enabled():
+            return
+        os.makedirs(LOG_DIR, exist_ok=True)
+        super().emit(record)
+
+
+class DebugModeStreamHandler(logging.StreamHandler):
+    def emit(self, record):
+        if not is_debug_logging_enabled():
+            return
+        super().emit(record)
+
+
+set_debug_logging_enabled(_read_debug_mode_from_config())
 
 def get_logger(name=None):
     '''
@@ -52,13 +88,13 @@ def get_logger(name=None):
         )
 
         # ファイル出力設定 (2MB制限, 3世代までバックアップ)
-        file_handler = RotatingFileHandler(
-            log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding='utf-8'
+        file_handler = DebugModeRotatingFileHandler(
+            log_file, maxBytes=2 * 1024 * 1024, backupCount=3, encoding='utf-8', delay=True
         )
         file_handler.setFormatter(formatter)
 
         # コンソール出力設定（デバッグ中に便利）
-        stream_handler = logging.StreamHandler()
+        stream_handler = DebugModeStreamHandler()
         stream_handler.setFormatter(formatter)
 
         logger.addHandler(file_handler)

@@ -2,7 +2,7 @@ import json
 import os
 import traceback
 
-from src.logger import get_logger
+from src.logger import get_logger, set_debug_logging_enabled
 
 logger = get_logger(__name__)
 
@@ -62,8 +62,10 @@ class Config:
 
         # UI
         self.language = "ja"
+        self.debug_mode = False
 
         self.load_config()
+        set_debug_logging_enabled(self.debug_mode)
         self.save_config()
 
     def load_config(self):
@@ -111,6 +113,7 @@ class Config:
             self.image_save_path = config_data.get("image_save_path", self.image_save_path)
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.language = config_data.get("language", self.language)
+            self.debug_mode = bool(config_data.get("debug_mode", self.debug_mode))
         except Exception as e:
             logger.error(traceback.format_exc())
             print(f"設定ファイル読み込みエラー: {e}")
@@ -142,6 +145,7 @@ class Config:
             "image_save_path": self.image_save_path,
             "websocket_data_port": self.websocket_data_port,
             "language": self.language,
+            "debug_mode": self.debug_mode,
         }
 
         try:
@@ -171,6 +175,7 @@ class Config:
                 "image_save_path": self.image_save_path,
                 "websocket_data_port": self.websocket_data_port,
                 "language": self.language,
+                "debug_mode": self.debug_mode,
             },
             ensure_ascii=False,
             indent=2,

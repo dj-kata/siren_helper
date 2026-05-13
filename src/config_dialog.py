@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_NONE, CAPTURE_MODE_OBS, Config
 from src.funcs import load_ui_text
-from src.logger import get_logger
+from src.logger import get_logger, set_debug_logging_enabled
 
 logger = get_logger(__name__)
 
@@ -95,6 +95,9 @@ class ConfigDialog(QDialog):
         self.keep_on_top_check = QCheckBox(self.ui.feature.keep_on_top)
         form.addRow(self.keep_on_top_check)
 
+        self.debug_mode_check = QCheckBox(self.ui.feature.debug_mode)
+        form.addRow(self.debug_mode_check)
+
         self.main_font_size_spin = QSpinBox()
         self.main_font_size_spin.setRange(8, 24)
         self.main_font_size_spin.setSuffix(" pt")
@@ -122,6 +125,7 @@ class ConfigDialog(QDialog):
         self.capture_mode_combo.setCurrentIndex(index if index >= 0 else 0)
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
+        self.debug_mode_check.setChecked(self.config.debug_mode)
         self.main_font_size_spin.setValue(self.config.main_font_size)
 
     def accept(self):
@@ -137,6 +141,8 @@ class ConfigDialog(QDialog):
         self.config.obs_enabled = self.config.capture_mode == CAPTURE_MODE_OBS
         self.config.obs_capture_interval_seconds = self.obs_capture_interval_spin.value()
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
+        self.config.debug_mode = self.debug_mode_check.isChecked()
+        set_debug_logging_enabled(self.config.debug_mode)
         self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()
         logger.info("設定を保存しました")

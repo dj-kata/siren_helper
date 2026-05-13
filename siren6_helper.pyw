@@ -17,15 +17,27 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from types import SimpleNamespace
 
+
+def is_debug_mode_enabled_from_config():
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            return bool(json.load(f).get("debug_mode", False))
+    except Exception:
+        return False
+
+
 if getattr(sys, "frozen", False):
     os.chdir(Path(sys.executable).resolve().parent)
-    Path("log").mkdir(exist_ok=True)
-    _native_crash_log = open(Path("log") / "native_crash.log", "a", encoding="utf-8")
-    faulthandler.enable(_native_crash_log)
+    if is_debug_mode_enabled_from_config():
+        Path("log").mkdir(exist_ok=True)
+        _native_crash_log = open(Path("log") / "native_crash.log", "a", encoding="utf-8")
+        faulthandler.enable(_native_crash_log)
 
 
 def startup_trace(message):
     if not getattr(sys, "frozen", False):
+        return
+    if not is_debug_mode_enabled_from_config():
         return
     try:
         log_dir = Path("log")
@@ -83,6 +95,8 @@ startup_trace("created logger")
 
 
 def write_fatal_error(exc):
+    if not is_debug_mode_enabled_from_config():
+        return
     log_dir = Path("log")
     log_dir.mkdir(exist_ok=True)
     with (log_dir / "fatal_error.log").open("a", encoding="utf-8") as f:
@@ -219,10 +233,10 @@ class MainWindow(MainWindowUI):
         self.latest_screen = None
         self.last_capture_attempt_time = 0.0
         self.capture_interval = self.config.obs_capture_interval_seconds
-        self.dungeon_ocr_reader = DungeonOcrReader()
+        self.dungeon_ocr_reader = DungeonOcrReader(self.config)
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 5.0
-        self.shop_ocr_reader = ShopOcrReader()
+        self.shop_ocr_reader = ShopOcrReader(self.config)
         self.last_shop_ocr_time = 0.0
         self.shop_ocr_interval = 1.5
         self.last_shop_result_signature = None
@@ -1761,7 +1775,11 @@ if __name__ == "__main__":
         write_fatal_error(exc)
         try:
             app = QApplication.instance() or QApplication(sys.argv)
-            QMessageBox.critical(None, "Siren 6 Helper 起動エラー", f"{exc}\n\n詳細は log/fatal_error.log を確認してください。")
+            if is_debug_mode_enabled_from_config():
+                detail = "\n\n詳細は log/fatal_error.log を確認してください。"
+            else:
+                detail = ""
+            QMessageBox.critical(None, "Siren 6 Helper 起動エラー", f"{exc}{detail}")
         except Exception:
             pass
         raise

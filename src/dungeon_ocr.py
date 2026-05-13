@@ -74,8 +74,12 @@ def match_dungeon(text: str, dungeons: list[dict]) -> tuple[dict | None, float]:
 
 
 class DungeonOcrReader:
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = config
         self._ocr = None
+
+    def _debug_mode(self) -> bool:
+        return bool(getattr(self.config, "debug_mode", False))
 
     def read(self, screen, dungeons: list[dict]) -> DungeonOcrResult | None:
         if screen is None or not dungeons:
@@ -131,6 +135,8 @@ class DungeonOcrReader:
         return " ".join(texts)
 
     def _save_debug_crop(self, crop):
+        if not self._debug_mode():
+            return
         try:
             DEBUG_CROP_PATH.parent.mkdir(parents=True, exist_ok=True)
             crop.save(DEBUG_CROP_PATH)

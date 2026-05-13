@@ -63,8 +63,12 @@ def xywh_to_box(crop_xywh):
 
 
 class ShopOcrReader:
-    def __init__(self):
+    def __init__(self, config=None):
+        self.config = config
         self._ocr = None
+
+    def _debug_mode(self) -> bool:
+        return bool(getattr(self.config, "debug_mode", False))
 
     def read(self, screen) -> ShopPriceResult | None:
         if screen is None:
@@ -217,6 +221,8 @@ class ShopOcrReader:
         return texts
 
     def _save_debug_crop(self, label, crop):
+        if not self._debug_mode():
+            return
         try:
             DEBUG_CROP_DIR.mkdir(parents=True, exist_ok=True)
             crop.save(DEBUG_CROP_DIR / f"{label}.png")

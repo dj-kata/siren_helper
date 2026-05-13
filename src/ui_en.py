@@ -80,6 +80,7 @@ class UIText:
         capture_mode_direct = 'Direct capture (Steam only)'
         obs_capture_interval = 'Capture interval:'
         keep_on_top = 'Always on Top'
+        debug_mode = 'Debug mode (write log files and OCR debug images)'
         main_font_size = 'Main window font size:'
     
     class music_pack:
