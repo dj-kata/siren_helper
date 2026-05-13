@@ -74,7 +74,11 @@ class UIText:
         autoload_offset = '自動読み込みオフセット:'
         websocket_port = 'データ表示用port:'
         obs_enabled = 'OBS連携を有効にする'
-        obs_capture_interval = 'OBS画面取得間隔:'
+        capture_mode = 'ゲーム画面取得方法:'
+        capture_mode_none = '自動取得なし'
+        capture_mode_obs = 'OBS経由'
+        capture_mode_direct = '直接取得(Steam版のみ)'
+        obs_capture_interval = '画面取得間隔:'
         keep_on_top = '常に最前面表示する'
         main_font_size = 'メイン画面のフォントサイズ:'
     

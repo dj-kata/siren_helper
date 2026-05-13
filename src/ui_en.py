@@ -74,7 +74,11 @@ class UIText:
         autoload_offset = 'Auto-load offset:'
         websocket_port = 'Data display port:'
         obs_enabled = 'Enable OBS integration'
-        obs_capture_interval = 'OBS capture interval:'
+        capture_mode = 'Game screen capture:'
+        capture_mode_none = 'No auto capture'
+        capture_mode_obs = 'Via OBS'
+        capture_mode_direct = 'Direct capture (Steam only)'
+        obs_capture_interval = 'Capture interval:'
         keep_on_top = 'Always on Top'
         main_font_size = 'Main window font size:'
     

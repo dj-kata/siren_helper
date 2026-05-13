@@ -6,6 +6,11 @@ from src.logger import get_logger
 
 logger = get_logger(__name__)
 
+CAPTURE_MODE_NONE = "none"
+CAPTURE_MODE_OBS = "obs"
+CAPTURE_MODE_DIRECT = "direct"
+CAPTURE_MODES = (CAPTURE_MODE_NONE, CAPTURE_MODE_OBS, CAPTURE_MODE_DIRECT)
+
 
 def clamp_int(value, default, minimum, maximum):
     try:
@@ -29,6 +34,7 @@ class Config:
 
         # OBS WebSocket
         self.obs_enabled = False
+        self.capture_mode = CAPTURE_MODE_NONE
         self.websocket_host = "localhost"
         self.websocket_port = 4444
         self.websocket_password = ""
@@ -69,7 +75,12 @@ class Config:
             with open(self.config_file, "r", encoding="utf-8") as f:
                 config_data = json.load(f)
 
-            self.obs_enabled = bool(config_data.get("obs_enabled", self.obs_enabled))
+            legacy_obs_enabled = bool(config_data.get("obs_enabled", self.obs_enabled))
+            capture_mode = config_data.get("capture_mode")
+            if capture_mode not in CAPTURE_MODES:
+                capture_mode = CAPTURE_MODE_OBS if legacy_obs_enabled else CAPTURE_MODE_NONE
+            self.capture_mode = capture_mode
+            self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
             self.websocket_host = config_data.get("websocket_host", self.websocket_host)
             self.websocket_port = config_data.get("websocket_port", self.websocket_port)
             self.websocket_password = config_data.get("websocket_password", self.websocket_password)
@@ -106,8 +117,12 @@ class Config:
 
     def save_config(self):
         """設定ファイルに設定を保存する"""
+        if self.capture_mode not in CAPTURE_MODES:
+            self.capture_mode = CAPTURE_MODE_NONE
+        self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
             "obs_enabled": self.obs_enabled,
+            "capture_mode": self.capture_mode,
             "websocket_host": self.websocket_host,
             "websocket_port": self.websocket_port,
             "websocket_password": self.websocket_password,
@@ -150,6 +165,7 @@ class Config:
                 "websocket_host": self.websocket_host,
                 "websocket_port": self.websocket_port,
                 "obs_enabled": self.obs_enabled,
+                "capture_mode": self.capture_mode,
                 "monitor_source_name": self.monitor_source_name,
                 "obs_scene_collection": self.obs_scene_collection,
                 "image_save_path": self.image_save_path,

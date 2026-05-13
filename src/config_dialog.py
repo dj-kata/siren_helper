@@ -8,6 +8,7 @@ import os
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -23,7 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.config import Config
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_NONE, CAPTURE_MODE_OBS, Config
 from src.funcs import load_ui_text
 from src.logger import get_logger
 
@@ -78,8 +79,11 @@ class ConfigDialog(QDialog):
         self.websocket_data_port_edit.setValidator(QIntValidator(1000, 65535))
         form.addRow(self.ui.feature.websocket_port, self.websocket_data_port_edit)
 
-        self.obs_enabled_check = QCheckBox(self.ui.feature.obs_enabled)
-        form.addRow(self.obs_enabled_check)
+        self.capture_mode_combo = QComboBox()
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_none, CAPTURE_MODE_NONE)
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_obs, CAPTURE_MODE_OBS)
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_direct, CAPTURE_MODE_DIRECT)
+        form.addRow(self.ui.feature.capture_mode, self.capture_mode_combo)
 
         self.obs_capture_interval_spin = QDoubleSpinBox()
         self.obs_capture_interval_spin.setRange(1.0, 30.0)
@@ -114,7 +118,8 @@ class ConfigDialog(QDialog):
     def load_config_values(self):
         self.image_save_path_edit.setText(self.config.image_save_path)
         self.websocket_data_port_edit.setText(str(self.config.websocket_data_port))
-        self.obs_enabled_check.setChecked(self.config.obs_enabled)
+        index = self.capture_mode_combo.findData(self.config.capture_mode)
+        self.capture_mode_combo.setCurrentIndex(index if index >= 0 else 0)
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.main_font_size_spin.setValue(self.config.main_font_size)
@@ -128,7 +133,8 @@ class ConfigDialog(QDialog):
         except ValueError:
             logger.warning("ポート番号の変換に失敗しました。既存値を使用します")
 
-        self.config.obs_enabled = self.obs_enabled_check.isChecked()
+        self.config.capture_mode = self.capture_mode_combo.currentData() or CAPTURE_MODE_NONE
+        self.config.obs_enabled = self.config.capture_mode == CAPTURE_MODE_OBS
         self.config.obs_capture_interval_seconds = self.obs_capture_interval_spin.value()
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
         self.config.main_font_size = self.main_font_size_spin.value()

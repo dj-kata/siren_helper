@@ -36,6 +36,7 @@ except ImportError:
 
 from src.funcs import load_ui_text
 from src.logger import get_logger
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_OBS
 
 logger = get_logger(__name__)
 
@@ -94,13 +95,16 @@ class MainWindowUI(QMainWindow):
         self.statusBar().showMessage(self.ui.main.status_ready)
 
     def update_obs_status_label(self, is_connected: bool):
-        if self.config.obs_enabled:
+        if self.config.capture_mode == CAPTURE_MODE_OBS:
             status = self.ui.obs.connected if is_connected else self.ui.obs.not_connected
             color = "green" if is_connected else "red"
+            self.obs_status_label.setText(f"OBS: {status}")
+        elif self.config.capture_mode == CAPTURE_MODE_DIRECT:
+            color = "green"
+            self.obs_status_label.setText(f"取得: {self.ui.feature.capture_mode_direct}")
         else:
-            status = self.ui.obs.disabled
             color = "gray"
-        self.obs_status_label.setText(f"OBS: {status}")
+            self.obs_status_label.setText(f"取得: {self.ui.feature.capture_mode_none}")
         self.obs_status_label.setStyleSheet(f"color: {color}; font-weight: bold;")
 
     def create_identification_tab(self):

@@ -52,10 +52,12 @@ except ImportError:
     print("警告: keyboardライブラリがインストールされていません。グローバルホットキーは無効です。")
 startup_trace("imported keyboard")
 
-from src.config import Config
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_OBS, Config
 startup_trace("imported src.config")
 from src.config_dialog import ConfigDialog
 startup_trace("imported src.config_dialog")
+from src.direct_capture import capture_shiren_window
+startup_trace("imported src.direct_capture")
 from src.dungeon_ocr import DungeonOcrReader
 from src.dungeon_ocr import normalize_ocr_text
 startup_trace("imported src.dungeon_ocr")
@@ -242,7 +244,7 @@ class MainWindow(MainWindowUI):
         self.init_identification_ui()
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
-        if self.config.obs_enabled:
+        if self.config.capture_mode == CAPTURE_MODE_OBS:
             QTimer.singleShot(0, self.start_obs_connection)
         else:
             self.update_obs_status_label(False)
@@ -290,7 +292,7 @@ class MainWindow(MainWindowUI):
             self.websocket_thread.join(timeout=2.0)
 
     def check_obs_configuration(self):
-        if not self.config.obs_enabled:
+        if self.config.capture_mode != CAPTURE_MODE_OBS:
             return
 
         status = self.obs_manager.get_detailed_status()
@@ -348,18 +350,18 @@ class MainWindow(MainWindowUI):
                 self.statusBar().showMessage("OBS制御設定を更新しました", 3000)
         finally:
             self.obs_manager.auto_reconnect = obs_auto_reconnect
-            if self.config.obs_enabled and obs_monitor_was_running and not dialog_accepted:
+            if self.config.capture_mode == CAPTURE_MODE_OBS and obs_monitor_was_running and not dialog_accepted:
                 self.obs_manager.start_monitor()
             if main_timer_was_active:
                 self.main_timer.start(250)
             if display_timer_was_active:
                 self.display_timer.start(500)
-            if dialog_accepted and self.config.obs_enabled:
+            if dialog_accepted and self.config.capture_mode == CAPTURE_MODE_OBS:
                 QTimer.singleShot(250, self.connect_obs_after_dialog)
 
     def update_all_configs(self, connect_obs: bool = True):
         old_port = self.config.websocket_data_port
-        old_obs_enabled = self.config.obs_enabled
+        old_capture_mode = self.config.capture_mode
         self.config.load_config()
         self.obs_manager.set_config(self.config)
         self.capture_interval = self.config.obs_capture_interval_seconds
@@ -375,8 +377,8 @@ class MainWindow(MainWindowUI):
             self.start_websocket_server()
             self.broadcast_monster_floor_state()
 
-        if not self.config.obs_enabled:
-            if self.obs_manager.is_connected or old_obs_enabled:
+        if self.config.capture_mode != CAPTURE_MODE_OBS:
+            if self.obs_manager.is_connected or old_capture_mode == CAPTURE_MODE_OBS:
                 self.obs_manager.disconnect()
             self.update_obs_status_label(False)
             self.capture_status = self.ui.main.waiting_capture
@@ -387,7 +389,7 @@ class MainWindow(MainWindowUI):
 
     def connect_obs_after_dialog(self):
         """OBS設定ダイアログを閉じた後にOBSへ接続する"""
-        if not self.config.obs_enabled or self.obs_manager.is_connected:
+        if self.config.capture_mode != CAPTURE_MODE_OBS or self.obs_manager.is_connected:
             return
 
         auto_reconnect = self.obs_manager.auto_reconnect
@@ -935,13 +937,16 @@ class MainWindow(MainWindowUI):
             logger.info("OBS接続が確立されました")
 
     def main_loop(self):
-        """OBSから監視対象ソースを定期取得する"""
+        """設定された取得方法でゲーム画面を定期取得する"""
         try:
-            if not self.config.obs_enabled:
+            if self.config.capture_mode not in (CAPTURE_MODE_OBS, CAPTURE_MODE_DIRECT):
                 self.capture_status = self.ui.main.waiting_capture
                 return
 
-            if not self.obs_manager.is_connected or not self.config.monitor_source_name:
+            if (
+                self.config.capture_mode == CAPTURE_MODE_OBS
+                and (not self.obs_manager.is_connected or not self.config.monitor_source_name)
+            ):
                 self.capture_status = self.ui.main.waiting_capture
                 return
 
@@ -979,19 +984,26 @@ class MainWindow(MainWindowUI):
             "shop_result": None,
         }
         try:
-            self.obs_manager.screenshot()
-            if self.obs_manager.screen is None:
+            screen = self.capture_game_screen()
+            if screen is None:
                 result["capture_failed"] = True
                 return
-
-            screen = self.obs_manager.screen
             result["screen"] = screen
             result["dungeon_result"] = self.read_dungeon_from_screen(screen)
             result["shop_result"] = self.read_shop_from_screen(screen)
         except Exception:
+            result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
         finally:
             self.capture_processed.emit(result)
+
+    def capture_game_screen(self):
+        if self.config.capture_mode == CAPTURE_MODE_OBS:
+            self.obs_manager.screenshot()
+            return self.obs_manager.screen
+        if self.config.capture_mode == CAPTURE_MODE_DIRECT:
+            return capture_shiren_window()
+        return None
 
     def on_capture_processed(self, result):
         try:
