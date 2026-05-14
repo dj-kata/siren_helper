@@ -152,6 +152,7 @@ SHOP_CATEGORY_HINTS = {
 DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
 INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+MONSTER_ICON_FILENAME_MAP_PATH = Path("data/monster_icon_filenames.json")
 MONSTER_ICON_NAME_ALIASES = {
     "洞窟マムル": "どうくつマムル",
 }
@@ -220,6 +221,7 @@ class MainWindow(MainWindowUI):
         self.siren_settings = UserSettings()
         self.itemlist = ItemList()
         self.itemlist.load(self.siren_settings.params)
+        self.monster_icon_filename_map = self.load_monster_icon_filename_map()
         self.dungeons = self.load_dungeon_filters()
         self.selected_dungeon_key = self.default_dungeon_key()
 
@@ -484,6 +486,18 @@ class MainWindow(MainWindowUI):
         order = {key: index for index, key in enumerate(preferred_order)}
         return sorted(dungeons, key=lambda dungeon: (order.get(dungeon["key"], 999), dungeon["name"]))
 
+    def load_monster_icon_filename_map(self):
+        try:
+            with MONSTER_ICON_FILENAME_MAP_PATH.open(encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            logger.warning(f"モンスターアイコン名対応表の読み込みに失敗しました: {MONSTER_ICON_FILENAME_MAP_PATH}")
+            return {}
+        if not isinstance(data, dict):
+            logger.warning(f"モンスターアイコン名対応表の形式が不正です: {MONSTER_ICON_FILENAME_MAP_PATH}")
+            return {}
+        return {str(name): str(filename) for name, filename in data.items()}
+
     def default_dungeon_key(self):
         saved_key = self.siren_settings.params.get("selected_dungeon", "")
         available_keys = {dungeon["key"] for dungeon in self.dungeons}
@@ -651,7 +665,7 @@ class MainWindow(MainWindowUI):
     def monster_icon_sources(self, name):
         filenames = []
         for candidate in (name, MONSTER_ICON_NAME_ALIASES.get(name, "")):
-            filename = self.safe_icon_filename(candidate)
+            filename = self.monster_icon_filename_map.get(candidate) or self.safe_icon_filename(candidate)
             if filename and filename not in filenames:
                 filenames.append(filename)
         if not filenames:

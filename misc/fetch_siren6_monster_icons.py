@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -21,6 +22,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 DEFAULT_URL = "https://kamigame.jp/shiren6/page/300662776156709551.html"
 DEFAULT_OUTPUT_DIR = Path("data/icons")
+DEFAULT_FILENAME_MAP = Path("data/monster_icon_filenames.json")
 INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 CONTENT_TYPE_EXTENSIONS = {
     "image/jpeg": ".jpg",
@@ -43,6 +45,16 @@ def safe_filename(value: str) -> str:
     if not name:
         raise ValueError("empty monster name cannot be used as a filename")
     return name
+
+
+def load_filename_map(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"filename map must be a JSON object: {path}")
+    return {str(name): safe_filename(str(filename)) for name, filename in data.items()}
 
 
 def image_extension(response: requests.Response) -> str:
@@ -101,6 +113,7 @@ def fetch_monster_icons(
     session: requests.Session,
     page_url: str,
     output_dir: Path,
+    filename_map: dict[str, str],
     timeout: float,
     sleep: float,
     overwrite: bool,
@@ -121,7 +134,7 @@ def fetch_monster_icons(
 
     saved = 0
     for index, (name, url) in enumerate(icons, start=1):
-        filename_base = safe_filename(name)
+        filename_base = filename_map.get(name) or safe_filename(name)
         existing = next(output_dir.glob(f"{filename_base}.*"), None)
         if existing and not overwrite:
             print(f"[{index:03}/{len(icons):03}] skip {name}: {existing}")
@@ -157,6 +170,12 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OUTPUT_DIR,
         help=f"directory to save icons (default: {DEFAULT_OUTPUT_DIR})",
     )
+    parser.add_argument(
+        "--filename-map",
+        type=Path,
+        default=DEFAULT_FILENAME_MAP,
+        help=f"JSON map from monster names to ASCII icon filenames (default: {DEFAULT_FILENAME_MAP})",
+    )
     parser.add_argument("--timeout", type=float, default=20.0, help="request timeout seconds (default: 20)")
     parser.add_argument("--sleep", type=float, default=0.1, help="seconds to wait between icon requests (default: 0.1)")
     parser.add_argument("--overwrite", action="store_true", help="overwrite existing icon files")
@@ -173,10 +192,12 @@ def main() -> int:
     })
 
     try:
+        filename_map = load_filename_map(args.filename_map)
         found, saved = fetch_monster_icons(
             session=session,
             page_url=args.url,
             output_dir=args.output_dir,
+            filename_map=filename_map,
             timeout=args.timeout,
             sleep=args.sleep,
             overwrite=args.overwrite,
