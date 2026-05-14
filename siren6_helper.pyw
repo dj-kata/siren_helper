@@ -246,7 +246,7 @@ class MainWindow(MainWindowUI):
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.dungeon_ocr_reader = DungeonOcrReader(self.config)
         self.last_dungeon_ocr_time = 0.0
-        self.dungeon_ocr_interval = 5.0
+        self.dungeon_ocr_interval = 3.0
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.last_shop_result_signature = None
         self.item_identification_revision = 0
