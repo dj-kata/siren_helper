@@ -56,6 +56,7 @@ Steam版&直接取得での利用を推奨します。
 - siren6_helper.exe: プログラム本体
 - template\: HTMLテンプレート
   - overlay.html: 配信画面風オーバーレイ
+  - vertical_overlay.html: 2つの情報を縦に並べただけのビュー。直接ブラウザで確認する用途を想定。
   - monster_icons.html: その階層の出現モンスター表示用
   - shop_price_candidates.html: 価格識別用
 
@@ -82,6 +83,12 @@ OBS上で本ツールの情報表示を行う場合は、
 文字認識を定期的に実行するせいか若干PCへの負荷が大きめです。  
 
 Switch版の場合は[こちら](https://github.com/dj-kata/siren_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E5%88%A9%E7%94%A8%E6%96%B9%E6%B3%95)を参考にOBSwebsocket設定を行ってください。(かなり重いです)
+
+店内での価格取得について、アイテム欄選択ではなく、以下のようにアイテムの上に乗っている場合にのみ動作します。
+<img width="960" alt="Image" src="https://github.com/user-attachments/assets/da7d4e4e-10b8-4da5-9327-358b0fd0e0a0" />  
+
+アイテム欄選択では動作しません(カーソル周りの取得がめんどくさそうなため)
+<img width="960" alt="Image" src="https://github.com/user-attachments/assets/5502e520-80c4-4600-870b-a3ecf1a9115d" />
 
 # 主な操作方法
 ## 共通部分
