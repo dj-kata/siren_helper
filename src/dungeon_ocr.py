@@ -77,9 +77,6 @@ class DungeonOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
-    def _use_gpu(self) -> bool:
-        return bool(getattr(self.config, "ocr_use_gpu", False))
-
     def read(self, screen, dungeons: list[dict]) -> DungeonOcrResult | None:
         if screen is None or not dungeons:
             return None
@@ -145,5 +142,5 @@ class DungeonOcrReader:
         if self._ocr is None:
             from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
-            self._ocr = ONNXPaddleOcr(use_gpu=self._use_gpu(), lang="japan", show_log=False)
+            self._ocr = ONNXPaddleOcr(use_gpu=False, lang="japan", show_log=False)
         return self._ocr

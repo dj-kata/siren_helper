@@ -194,6 +194,13 @@ def find_shop_price_candidates(itemlist, category, price, price_kind, dungeon):
     return sort_shop_price_candidates(candidates)
 
 
+def find_all_shop_price_candidates(itemlist, price, price_kind, dungeon):
+    candidates = []
+    for category in ("kusa", "makimono", "udewa", "tubo", "okou", "tue"):
+        candidates.extend(find_shop_price_candidates(itemlist, category, price, price_kind, dungeon))
+    return sort_shop_price_candidates(candidates)
+
+
 def format_candidate(candidate):
     item, detail, price_state = candidate
     price_state_text = f"({price_state})" if price_state else ""
@@ -239,7 +246,7 @@ def resolve_candidates(itemlist, shop_result, dungeon):
     exact = find_item_by_name(itemlist, shop_result.item_text)
     if exact:
         category, item, score = exact
-        if category in ("buki", "tate"):
+        if shop_result.price is not None:
             candidates = find_item_price_candidates(item, shop_result.price, shop_result.price_kind)
         else:
             candidates = [(item, "", "")]
@@ -251,11 +258,7 @@ def resolve_candidates(itemlist, shop_result, dungeon):
         }
 
     category = detect_shop_item_category(shop_result.item_text)
-    candidates = (
-        find_shop_price_candidates(itemlist, category, shop_result.price, shop_result.price_kind, dungeon)
-        if category
-        else []
-    )
+    candidates = find_shop_price_candidates(itemlist, category, shop_result.price, shop_result.price_kind, dungeon) if category else find_all_shop_price_candidates(itemlist, shop_result.price, shop_result.price_kind, dungeon)
     return {
         "category": category,
         "category_label": ITEM_CATEGORY_LABELS.get(category, category) if category else None,
@@ -317,12 +320,11 @@ def main():
         default=CAPTURE_RESOLUTION_FULLHD,
         help="本体の画面取得解像度として扱うサイズ。FullHD画像でも960x540指定時は縮小してから処理します。",
     )
-    parser.add_argument("--gpu", action="store_true", help="ONNXPaddleOcr(use_gpu=True)で実行する")
     parser.add_argument("--debug-crops", action="store_true", help="OCR crop画像をlogへ保存する")
     parser.add_argument("--json", action="store_true", help="結果をJSONで出力する")
     args = parser.parse_args()
 
-    config = SimpleNamespace(debug_mode=args.debug_crops, ocr_use_gpu=args.gpu)
+    config = SimpleNamespace(debug_mode=args.debug_crops)
     dungeon_reader = DungeonOcrReader(config)
     shop_reader = ShopOcrReader(config)
     itemlist = ItemList()
@@ -351,7 +353,7 @@ def main():
             "original_size": original.size,
             "processed_size": image.size,
             "resolution": args.resolution,
-            "use_gpu": args.gpu,
+            "use_gpu": False,
             "dungeon": dungeon,
             "shop_inspection": shop_inspection,
             "shop_result": asdict(shop_result) if shop_result else None,

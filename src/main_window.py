@@ -157,6 +157,8 @@ class MainWindowUI(QMainWindow):
                 width = 220 if header == "簡単な説明" else 90
                 if header == "名前":
                     width = 170
+                elif header in ("異種", "異種合成"):
+                    width = 270
                 elif header in ("+1", "下限", "上限", "Lv", "基礎値", "印数"):
                     width = 60
                 table.setColumnWidth(column, width)

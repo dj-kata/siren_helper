@@ -76,6 +76,12 @@ class Tubo(Item):
             str_demerit = "(デメリット) " 
         print(f"{self.name}[{self.capa_min}-{self.capa_max}] {str_demerit}({self.category.ja}), 買値:{self.buy:,}-{self.buy_max:,}, 売値:{self.sell:,}-{self.sell_max:,}")
 
+DEFAULT_IDENTIFIED_ITEM_NAMES = {
+    "白紙の巻物",
+    "ぬれた巻物",
+}
+
+
 class ItemList:
     data_path = (
         Path(sys.executable).resolve().parent / "data" / "6_items.json"
@@ -160,6 +166,7 @@ class ItemList:
                 bin_value,
                 tin_value,
                 memo=row.get("簡単な説明", ""),
+                default_get=row.get("名前", "") in DEFAULT_IDENTIFIED_ITEM_NAMES,
                 raw_data=row,
             ))
         return self._sort_by_buy(items)
@@ -210,21 +217,21 @@ class ItemList:
             params (dict): settings.jsonの内容
         """
         for i,tmp in enumerate(self.kusa):
-            tmp.get = bool(params.get('kusa', [])[i]) if i < len(params.get('kusa', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('kusa', [])[i]) if i < len(params.get('kusa', [])) else False)
         for i,tmp in enumerate(self.makimono):
-            tmp.get = bool(params.get('makimono', [])[i]) if i < len(params.get('makimono', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('makimono', [])[i]) if i < len(params.get('makimono', [])) else False)
         for i,tmp in enumerate(self.udewa):
-            tmp.get = bool(params.get('udewa', [])[i]) if i < len(params.get('udewa', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('udewa', [])[i]) if i < len(params.get('udewa', [])) else False)
         for i,tmp in enumerate(self.tubo):
-            tmp.get = bool(params.get('tubo', [])[i]) if i < len(params.get('tubo', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('tubo', [])[i]) if i < len(params.get('tubo', [])) else False)
         for i,tmp in enumerate(self.okou):
-            tmp.get = bool(params.get('okou', [])[i]) if i < len(params.get('okou', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('okou', [])[i]) if i < len(params.get('okou', [])) else False)
         for i,tmp in enumerate(self.tue):
-            tmp.get = bool(params.get('tue', [])[i]) if i < len(params.get('tue', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('tue', [])[i]) if i < len(params.get('tue', [])) else False)
         for i,tmp in enumerate(self.buki):
-            tmp.get = bool(params.get('buki', [])[i]) if i < len(params.get('buki', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('buki', [])[i]) if i < len(params.get('buki', [])) else False)
         for i,tmp in enumerate(self.tate):
-            tmp.get = bool(params.get('tate', [])[i]) if i < len(params.get('tate', [])) else tmp.default_get
+            tmp.get = tmp.default_get or (bool(params.get('tate', [])[i]) if i < len(params.get('tate', [])) else False)
 
     def save(self, params):
         """チェック済みかどうかの状態をdictへ出力

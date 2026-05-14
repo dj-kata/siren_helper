@@ -812,6 +812,8 @@ class MainWindow(MainWindowUI):
         changed = False
         for row in selected_rows:
             if 0 <= row < len(target):
+                if target[row].default_get:
+                    continue
                 changed = changed or target[row].get != identified
                 target[row].get = identified
 
@@ -830,6 +832,9 @@ class MainWindow(MainWindowUI):
             return
 
         item = target[row]
+        if item.default_get:
+            self.statusBar().showMessage(f"{item.name} は常に識別済みです", 3000)
+            return
         item.get = not item.get
         self.touch_item_identification_state()
         self.update_item_tables()
@@ -1146,6 +1151,11 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state_if_stale()
 
     def read_shop_from_screen(self, screen):
+        now = time.monotonic()
+        if now - self.last_shop_ocr_time < self.shop_ocr_interval:
+            return None
+        self.last_shop_ocr_time = now
+
         try:
             result = self.shop_ocr_reader.read(screen)
             if not result:
@@ -1182,11 +1192,17 @@ class MainWindow(MainWindowUI):
         exact = self.find_item_by_name(result.item_text)
         if exact:
             category, item = exact
-            if category in ("buki", "tate"):
+            if result.price is not None:
                 candidates = self.find_item_price_candidates(item, result.price, result.price_kind)
+                if item.default_get:
+                    item.get = True
+                elif not item.get and category not in ("buki", "tate"):
+                    item.get = True
+                    self.touch_item_identification_state()
+                    self.update_item_tables()
                 self.broadcast_shop_price_state(result, category, candidates, exact_item=item)
                 logger.info(
-                    "店OCR: 識別済み装備品価格候補 category=%s kind=%s price=%s candidates=%s",
+                    "店OCR: 識別済みアイテム価格候補 category=%s kind=%s price=%s candidates=%s",
                     category,
                     result.price_kind,
                     result.price,
@@ -1250,15 +1266,28 @@ class MainWindow(MainWindowUI):
 
         category = self.detect_shop_item_category(result.item_text)
         if not category:
+            candidates = self.find_all_shop_price_candidates(result.price, result.price_kind)
+            self.broadcast_shop_price_state(result, None, candidates)
             logger.info(
-                "店OCR: 種別判定失敗 ocr=%r normalized=%r price=%s kind=%s",
+                "店OCR: 種別不明の価格候補 ocr=%r normalized=%r price=%s kind=%s candidates=%s",
                 result.item_text,
                 self.normalize_item_match_text(result.item_text),
                 result.price,
                 result.price_kind,
+                tuple(self.format_shop_candidate(candidate) for candidate in candidates),
             )
-            self.hide_shop_price_state()
-            self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
+            self.select_shop_candidate_items(candidates)
+            if candidates:
+                names = [self.format_shop_candidate(candidate) for candidate in candidates]
+                preview = "、".join(names[:8])
+                suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
+                price_label = "売値" if result.price_kind == "sell" else "買値"
+                self.statusBar().showMessage(
+                    f"店OCR候補: 種別不明 {price_label}{result.price} -> {preview}{suffix}",
+                    8000,
+                )
+            else:
+                self.statusBar().showMessage(f"店OCR候補なし: 種別不明 {result.price}G", 5000)
             return
 
         candidates = self.find_shop_price_candidates(category, result.price, result.price_kind)
@@ -1368,6 +1397,12 @@ class MainWindow(MainWindowUI):
             if item.get or item.default_get:
                 continue
             candidates.extend(self.find_item_price_candidates(item, price, price_kind))
+        return self.sort_shop_price_candidates(candidates)
+
+    def find_all_shop_price_candidates(self, price, price_kind):
+        candidates = []
+        for category in STAT_CATEGORIES:
+            candidates.extend(self.find_shop_price_candidates(category, price, price_kind))
         return self.sort_shop_price_candidates(candidates)
 
     def find_manual_shop_price_candidates(self, category, price, price_kind):
@@ -1680,6 +1715,15 @@ class MainWindow(MainWindowUI):
             selected_rows.append(row)
         if selected_rows:
             table.scrollToItem(table.item(selected_rows[0], 0))
+
+    def select_shop_candidate_items(self, candidates):
+        categories = {}
+        for item, _detail, _price_state in candidates:
+            categories.setdefault(item.category.name, []).append(item)
+        for category in ITEM_CATEGORIES:
+            if category in categories:
+                self.select_items_in_table(category, categories[category])
+                return
 
     def broadcast_capture_state(self):
         if not self.websocket_server:
