@@ -248,8 +248,6 @@ class MainWindow(MainWindowUI):
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 5.0
         self.shop_ocr_reader = ShopOcrReader(self.config)
-        self.last_shop_ocr_time = 0.0
-        self.shop_ocr_interval = 1.5
         self.last_shop_result_signature = None
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
@@ -1148,11 +1146,6 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state_if_stale()
 
     def read_shop_from_screen(self, screen):
-        now = time.monotonic()
-        if now - self.last_shop_ocr_time < self.shop_ocr_interval:
-            return None
-        self.last_shop_ocr_time = now
-
         try:
             result = self.shop_ocr_reader.read(screen)
             if not result:
