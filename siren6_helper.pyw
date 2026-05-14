@@ -71,6 +71,7 @@ from src.config import (
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
     Config,
+    OCR_CAPTURE_SIZE,
 )
 startup_trace("imported src.config")
 from src.config_dialog import ConfigDialog
@@ -1047,11 +1048,7 @@ class MainWindow(MainWindowUI):
             self.obs_manager.screenshot()
             return self.obs_manager.screen
         if self.config.capture_mode == CAPTURE_MODE_DIRECT:
-            target_size = CAPTURE_RESOLUTION_SIZES.get(
-                self.config.capture_resolution,
-                CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD],
-            )
-            return capture_shiren_window(target_size)
+            return capture_shiren_window(OCR_CAPTURE_SIZE)
         return None
 
     def on_capture_processed(self, result):

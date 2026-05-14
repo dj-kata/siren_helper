@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-from src.config import CAPTURE_RESOLUTION_FULLHD, CAPTURE_RESOLUTION_HALFHD, CAPTURE_RESOLUTION_SIZES
+from src.config import OCR_CAPTURE_RESOLUTION, OCR_CAPTURE_SIZE
 from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice
 from src.dungeon_ocr import DungeonOcrReader, normalize_ocr_text
 from src.item import ItemList
@@ -82,11 +82,10 @@ def load_dungeons():
     return dungeons
 
 
-def resize_for_resolution(image, resolution):
-    target_size = CAPTURE_RESOLUTION_SIZES[resolution]
-    if image.size == target_size:
+def resize_for_ocr(image):
+    if image.size == OCR_CAPTURE_SIZE:
         return image
-    return image.resize(target_size, Image.Resampling.LANCZOS)
+    return image.resize(OCR_CAPTURE_SIZE, Image.Resampling.LANCZOS)
 
 
 def normalize_item_match_text(text):
@@ -314,12 +313,6 @@ def print_result(result):
 def main():
     parser = argparse.ArgumentParser(description="シレン6 OCR判別の単体検証")
     parser.add_argument("images", nargs="+", help="検証する画像ファイル")
-    parser.add_argument(
-        "--resolution",
-        choices=(CAPTURE_RESOLUTION_FULLHD, CAPTURE_RESOLUTION_HALFHD),
-        default=CAPTURE_RESOLUTION_FULLHD,
-        help="本体の画面取得解像度として扱うサイズ。FullHD画像でも960x540指定時は縮小してから処理します。",
-    )
     parser.add_argument("--debug-crops", action="store_true", help="OCR crop画像をlogへ保存する")
     parser.add_argument("--json", action="store_true", help="結果をJSONで出力する")
     args = parser.parse_args()
@@ -335,7 +328,7 @@ def main():
         path = Path(image_path)
         with Image.open(path) as source:
             original = source.convert("RGB")
-        image = resize_for_resolution(original, args.resolution)
+        image = resize_for_ocr(original)
 
         dungeon_result = dungeon_reader.read(image, dungeons)
         dungeon = None
@@ -352,7 +345,7 @@ def main():
             "path": str(path),
             "original_size": original.size,
             "processed_size": image.size,
-            "resolution": args.resolution,
+            "resolution": OCR_CAPTURE_RESOLUTION,
             "use_gpu": False,
             "dungeon": dungeon,
             "shop_inspection": shop_inspection,

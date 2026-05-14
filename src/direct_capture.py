@@ -5,13 +5,14 @@ from ctypes import wintypes
 
 from PIL import Image, ImageGrab
 
+from src.config import OCR_CAPTURE_SIZE
 from src.logger import get_logger
 
 
 logger = get_logger(__name__)
 
 TARGET_EXE_NAMES = ("ShirenTheWanderer6.exe", "ShirenTheWanderer.exe")
-TARGET_SIZE = (1920, 1080)
+TARGET_SIZE = OCR_CAPTURE_SIZE
 
 
 class DirectCaptureError(RuntimeError):

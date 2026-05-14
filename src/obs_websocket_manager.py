@@ -6,7 +6,7 @@ from typing import Callable, Optional, List, Dict, Any
 from PySide6.QtCore import QObject, Signal
 
 import logging
-from src.config import CAPTURE_RESOLUTION_SIZES, CAPTURE_RESOLUTION_FULLHD, Config
+from src.config import OCR_CAPTURE_SIZE, Config
 from src.logger import get_logger
 from src.funcs import load_ui_text
 logger = get_logger(__name__)
@@ -70,8 +70,7 @@ class OBSWebSocketManager(QObject):
         self.stop_event = threading.Event()
         
         # 画面サイズ設定
-        self.picw = 1920
-        self.pich = 1080
+        self.picw, self.pich = OCR_CAPTURE_SIZE
         self.screen = None
 
         # 起動時シーンコレクション切り替えフラグ（disconnect後にリセット）
@@ -81,10 +80,7 @@ class OBSWebSocketManager(QObject):
         """設定をセット"""
         self.config = config
         self.ui = load_ui_text(config)
-        self.picw, self.pich = CAPTURE_RESOLUTION_SIZES.get(
-            config.capture_resolution,
-            CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD],
-        )
+        self.picw, self.pich = OCR_CAPTURE_SIZE
         logger.info(f"OBS WebSocket config set: {config.websocket_host}:{config.websocket_port}")
     
     def connect(self):
