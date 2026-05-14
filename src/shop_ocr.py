@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice, scaled_xywh_to_box
+from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice, crop_for_ocr
 from src.dungeon_ocr import normalize_ocr_text
 from src.logger import get_logger
 
@@ -64,6 +64,9 @@ class ShopOcrReader:
 
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
+
+    def _use_gpu(self) -> bool:
+        return bool(getattr(self.config, "ocr_use_gpu", False))
 
     def read(self, screen) -> ShopPriceResult | None:
         if screen is None:
@@ -187,8 +190,7 @@ class ShopOcrReader:
         import cv2
         import numpy as np
 
-        crop_box = scaled_xywh_to_box(crop_xywh, screen.size)
-        crop = screen.crop(crop_box).convert("RGB")
+        crop_box, crop = crop_for_ocr(screen, crop_xywh)
         self._save_debug_crop(label, crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
         result = self._engine().ocr(image, cls=False)
@@ -228,5 +230,5 @@ class ShopOcrReader:
         if self._ocr is None:
             from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
-            self._ocr = ONNXPaddleOcr(use_gpu=False, lang="japan", show_log=False)
+            self._ocr = ONNXPaddleOcr(use_gpu=self._use_gpu(), lang="japan", show_log=False)
         return self._ocr

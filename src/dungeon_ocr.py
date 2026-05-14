@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from src.define import scaled_xywh_to_box
+from src.define import crop_for_ocr
 from src.logger import get_logger
 
 
@@ -77,6 +77,9 @@ class DungeonOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
+    def _use_gpu(self) -> bool:
+        return bool(getattr(self.config, "ocr_use_gpu", False))
+
     def read(self, screen, dungeons: list[dict]) -> DungeonOcrResult | None:
         if screen is None or not dungeons:
             return None
@@ -106,8 +109,7 @@ class DungeonOcrReader:
         import cv2
         import numpy as np
 
-        crop_box = scaled_xywh_to_box(DUNGEON_INFO_CROP_XYWH, screen.size)
-        crop = screen.crop(crop_box).convert("RGB")
+        crop_box, crop = crop_for_ocr(screen, DUNGEON_INFO_CROP_XYWH)
         self._save_debug_crop(crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
         result = self._engine().ocr(image, cls=False)
@@ -143,5 +145,5 @@ class DungeonOcrReader:
         if self._ocr is None:
             from onnxocr.onnx_paddleocr import ONNXPaddleOcr
 
-            self._ocr = ONNXPaddleOcr(use_gpu=False, lang="japan", show_log=False)
+            self._ocr = ONNXPaddleOcr(use_gpu=self._use_gpu(), lang="japan", show_log=False)
         return self._ocr

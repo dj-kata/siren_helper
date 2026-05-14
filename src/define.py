@@ -32,6 +32,18 @@ def scaled_xywh_to_box(crop_xywh, image_size):
     return xywh_to_box(scale_xywh(crop_xywh, image_size))
 
 
+def crop_for_ocr(screen, crop_xywh):
+    """実画像サイズで切り出し、OCR入力だけFullHD基準のcropサイズへ戻す。"""
+    from PIL import Image
+
+    crop_box = scaled_xywh_to_box(crop_xywh, screen.size)
+    crop = screen.crop(crop_box).convert("RGB")
+    _x, _y, width, height = crop_xywh
+    if crop.size != (width, height):
+        crop = crop.resize((width, height), Image.Resampling.LANCZOS)
+    return crop_box, crop
+
+
 class DetectOnShop:
     '''店において買取価格表示があるかどうかを判定'''
     CROP_XYWH = (780,580,700,50)
