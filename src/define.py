@@ -2,6 +2,36 @@
 """
 from src.classes import *
 
+BASE_CAPTURE_SIZE = (1920, 1080)
+
+
+def scale_xywh(crop_xywh, image_size):
+    """FullHD基準のxywhを実画像サイズへスケールする。"""
+    base_width, base_height = BASE_CAPTURE_SIZE
+    image_width, image_height = image_size
+    scale_x = image_width / base_width
+    scale_y = image_height / base_height
+    x, y, width, height = crop_xywh
+    scaled_x = round(x * scale_x)
+    scaled_y = round(y * scale_y)
+    scaled_width = max(1, round(width * scale_x))
+    scaled_height = max(1, round(height * scale_y))
+    scaled_x = min(max(0, scaled_x), max(0, image_width - 1))
+    scaled_y = min(max(0, scaled_y), max(0, image_height - 1))
+    scaled_width = min(scaled_width, image_width - scaled_x)
+    scaled_height = min(scaled_height, image_height - scaled_y)
+    return (scaled_x, scaled_y, scaled_width, scaled_height)
+
+
+def xywh_to_box(crop_xywh):
+    x, y, width, height = crop_xywh
+    return (x, y, x + width, y + height)
+
+
+def scaled_xywh_to_box(crop_xywh, image_size):
+    return xywh_to_box(scale_xywh(crop_xywh, image_size))
+
+
 class DetectOnShop:
     '''店において買取価格表示があるかどうかを判定'''
     CROP_XYWH = (780,580,700,50)

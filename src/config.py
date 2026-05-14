@@ -10,6 +10,13 @@ CAPTURE_MODE_NONE = "none"
 CAPTURE_MODE_OBS = "obs"
 CAPTURE_MODE_DIRECT = "direct"
 CAPTURE_MODES = (CAPTURE_MODE_NONE, CAPTURE_MODE_OBS, CAPTURE_MODE_DIRECT)
+CAPTURE_RESOLUTION_FULLHD = "1920x1080"
+CAPTURE_RESOLUTION_HALFHD = "960x540"
+CAPTURE_RESOLUTIONS = (CAPTURE_RESOLUTION_FULLHD, CAPTURE_RESOLUTION_HALFHD)
+CAPTURE_RESOLUTION_SIZES = {
+    CAPTURE_RESOLUTION_FULLHD: (1920, 1080),
+    CAPTURE_RESOLUTION_HALFHD: (960, 540),
+}
 
 
 def clamp_int(value, default, minimum, maximum):
@@ -53,6 +60,7 @@ class Config:
         self.monitor_source_name = ""
         self.obs_scene_collection = ""
         self.obs_capture_interval_seconds = 1.0
+        self.capture_resolution = CAPTURE_RESOLUTION_FULLHD
 
         # 画像保存
         self.image_save_path = "captures"
@@ -110,6 +118,10 @@ class Config:
                 1.0,
                 30.0,
             )
+            capture_resolution = config_data.get("capture_resolution", self.capture_resolution)
+            if capture_resolution not in CAPTURE_RESOLUTIONS:
+                capture_resolution = CAPTURE_RESOLUTION_FULLHD
+            self.capture_resolution = capture_resolution
             self.image_save_path = config_data.get("image_save_path", self.image_save_path)
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.language = config_data.get("language", self.language)
@@ -122,6 +134,8 @@ class Config:
         """設定ファイルに設定を保存する"""
         if self.capture_mode not in CAPTURE_MODES:
             self.capture_mode = CAPTURE_MODE_NONE
+        if self.capture_resolution not in CAPTURE_RESOLUTIONS:
+            self.capture_resolution = CAPTURE_RESOLUTION_FULLHD
         self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
             "obs_enabled": self.obs_enabled,
@@ -142,6 +156,7 @@ class Config:
             "monitor_source_name": self.monitor_source_name,
             "obs_scene_collection": self.obs_scene_collection,
             "obs_capture_interval_seconds": self.obs_capture_interval_seconds,
+            "capture_resolution": self.capture_resolution,
             "image_save_path": self.image_save_path,
             "websocket_data_port": self.websocket_data_port,
             "language": self.language,
@@ -170,6 +185,7 @@ class Config:
                 "websocket_port": self.websocket_port,
                 "obs_enabled": self.obs_enabled,
                 "capture_mode": self.capture_mode,
+                "capture_resolution": self.capture_resolution,
                 "monitor_source_name": self.monitor_source_name,
                 "obs_scene_collection": self.obs_scene_collection,
                 "image_save_path": self.image_save_path,

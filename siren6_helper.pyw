@@ -53,6 +53,7 @@ startup_trace("start")
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
+from PIL import Image
 startup_trace("imported PySide6")
 
 try:
@@ -64,7 +65,13 @@ except ImportError:
     print("警告: keyboardライブラリがインストールされていません。グローバルホットキーは無効です。")
 startup_trace("imported keyboard")
 
-from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_OBS, Config
+from src.config import (
+    CAPTURE_MODE_DIRECT,
+    CAPTURE_MODE_OBS,
+    CAPTURE_RESOLUTION_FULLHD,
+    CAPTURE_RESOLUTION_SIZES,
+    Config,
+)
 startup_trace("imported src.config")
 from src.config_dialog import ConfigDialog
 startup_trace("imported src.config_dialog")
@@ -952,7 +959,11 @@ class MainWindow(MainWindowUI):
             filename = escape_for_filename(f"siren6_capture_{date}.png")
             os.makedirs(self.config.image_save_path, exist_ok=True)
             full_path = Path(self.config.image_save_path) / filename
-            self.latest_screen.save(full_path)
+            save_screen = self.latest_screen
+            fullhd_size = CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD]
+            if save_screen.size != fullhd_size:
+                save_screen = save_screen.resize(fullhd_size, Image.Resampling.LANCZOS)
+            save_screen.save(full_path)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
             return True
         except Exception as e:
@@ -1031,7 +1042,11 @@ class MainWindow(MainWindowUI):
             self.obs_manager.screenshot()
             return self.obs_manager.screen
         if self.config.capture_mode == CAPTURE_MODE_DIRECT:
-            return capture_shiren_window()
+            target_size = CAPTURE_RESOLUTION_SIZES.get(
+                self.config.capture_resolution,
+                CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD],
+            )
+            return capture_shiren_window(target_size)
         return None
 
     def on_capture_processed(self, result):

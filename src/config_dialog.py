@@ -24,7 +24,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_NONE, CAPTURE_MODE_OBS, Config
+from src.config import (
+    CAPTURE_MODE_DIRECT,
+    CAPTURE_MODE_NONE,
+    CAPTURE_MODE_OBS,
+    CAPTURE_RESOLUTION_FULLHD,
+    CAPTURE_RESOLUTION_HALFHD,
+    Config,
+)
 from src.funcs import load_ui_text
 from src.logger import get_logger, set_debug_logging_enabled
 
@@ -92,6 +99,17 @@ class ConfigDialog(QDialog):
         self.obs_capture_interval_spin.setSuffix(" sec")
         form.addRow(self.ui.feature.obs_capture_interval, self.obs_capture_interval_spin)
 
+        self.capture_resolution_combo = QComboBox()
+        self.capture_resolution_combo.addItem(
+            self.ui.feature.capture_resolution_fullhd,
+            CAPTURE_RESOLUTION_FULLHD,
+        )
+        self.capture_resolution_combo.addItem(
+            self.ui.feature.capture_resolution_halfhd,
+            CAPTURE_RESOLUTION_HALFHD,
+        )
+        form.addRow(self.ui.feature.capture_resolution, self.capture_resolution_combo)
+
         self.keep_on_top_check = QCheckBox(self.ui.feature.keep_on_top)
         form.addRow(self.keep_on_top_check)
 
@@ -124,6 +142,8 @@ class ConfigDialog(QDialog):
         index = self.capture_mode_combo.findData(self.config.capture_mode)
         self.capture_mode_combo.setCurrentIndex(index if index >= 0 else 0)
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
+        resolution_index = self.capture_resolution_combo.findData(self.config.capture_resolution)
+        self.capture_resolution_combo.setCurrentIndex(resolution_index if resolution_index >= 0 else 0)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.debug_mode_check.setChecked(self.config.debug_mode)
         self.main_font_size_spin.setValue(self.config.main_font_size)
@@ -140,6 +160,7 @@ class ConfigDialog(QDialog):
         self.config.capture_mode = self.capture_mode_combo.currentData() or CAPTURE_MODE_NONE
         self.config.obs_enabled = self.config.capture_mode == CAPTURE_MODE_OBS
         self.config.obs_capture_interval_seconds = self.obs_capture_interval_spin.value()
+        self.config.capture_resolution = self.capture_resolution_combo.currentData() or CAPTURE_RESOLUTION_FULLHD
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
         self.config.debug_mode = self.debug_mode_check.isChecked()
         set_debug_logging_enabled(self.config.debug_mode)

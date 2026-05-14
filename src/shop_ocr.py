@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice
+from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice, scaled_xywh_to_box
 from src.dungeon_ocr import normalize_ocr_text
 from src.logger import get_logger
 
@@ -55,11 +55,6 @@ def _box_left(box) -> float:
         return min(point[0] for point in box)
     except Exception:
         return 0.0
-
-
-def xywh_to_box(crop_xywh):
-    x, y, width, height = crop_xywh
-    return (x, y, x + width, y + height)
 
 
 class ShopOcrReader:
@@ -192,7 +187,7 @@ class ShopOcrReader:
         import cv2
         import numpy as np
 
-        crop_box = xywh_to_box(crop_xywh)
+        crop_box = scaled_xywh_to_box(crop_xywh, screen.size)
         crop = screen.crop(crop_box).convert("RGB")
         self._save_debug_crop(label, crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)

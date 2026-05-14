@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from src.define import scaled_xywh_to_box
 from src.logger import get_logger
 
 
@@ -28,11 +29,6 @@ def normalize_ocr_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "")
     normalized = normalized.replace("髓", "髄").replace("随", "髄")
     return TEXT_NOISE_PATTERN.sub("", normalized)
-
-
-def xywh_to_box(crop_xywh):
-    x, y, width, height = crop_xywh
-    return (x, y, x + width, y + height)
 
 
 def extract_floor(text: str) -> int | None:
@@ -110,7 +106,7 @@ class DungeonOcrReader:
         import cv2
         import numpy as np
 
-        crop_box = xywh_to_box(DUNGEON_INFO_CROP_XYWH)
+        crop_box = scaled_xywh_to_box(DUNGEON_INFO_CROP_XYWH, screen.size)
         crop = screen.crop(crop_box).convert("RGB")
         self._save_debug_crop(crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)

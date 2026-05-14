@@ -6,7 +6,7 @@ from typing import Callable, Optional, List, Dict, Any
 from PySide6.QtCore import QObject, Signal
 
 import logging
-from src.config import Config
+from src.config import CAPTURE_RESOLUTION_SIZES, CAPTURE_RESOLUTION_FULLHD, Config
 from src.logger import get_logger
 from src.funcs import load_ui_text
 logger = get_logger(__name__)
@@ -81,6 +81,10 @@ class OBSWebSocketManager(QObject):
         """設定をセット"""
         self.config = config
         self.ui = load_ui_text(config)
+        self.picw, self.pich = CAPTURE_RESOLUTION_SIZES.get(
+            config.capture_resolution,
+            CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD],
+        )
         logger.info(f"OBS WebSocket config set: {config.websocket_host}:{config.websocket_port}")
     
     def connect(self):

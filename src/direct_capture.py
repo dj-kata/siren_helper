@@ -50,7 +50,7 @@ if sys.platform == "win32":
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 
-def capture_shiren_window() -> Image.Image:
+def capture_shiren_window(target_size=TARGET_SIZE) -> Image.Image:
     """Steam版シレン6のウィンドウモードを直接キャプチャする。"""
     if sys.platform != "win32":
         raise DirectCaptureError("直接取得はWindows上でのみ利用できます")
@@ -64,8 +64,8 @@ def capture_shiren_window() -> Image.Image:
         raise DirectCaptureError("ゲームウィンドウの取得範囲を特定できません")
 
     image = ImageGrab.grab(bbox=bbox, all_screens=True).convert("RGB")
-    if image.size != TARGET_SIZE:
-        image = image.resize(TARGET_SIZE, Image.Resampling.LANCZOS)
+    if image.size != target_size:
+        image = image.resize(target_size, Image.Resampling.LANCZOS)
     return image
 
 
