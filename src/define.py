@@ -61,6 +61,6 @@ class PosMyItems:
     '''所持品一覧の切り取り(type1)'''
     CROP_XYWH = (1600,0,320,1080)
 
-class PosIsPlayHash:
-    '''プレー画面判定用のハッシュ'''
-    HASH = '105f487f5effb700'
+class PosItemIcons:
+    '''アイテムカテゴリ判別用。アイテム名左のアイコンを切り取る。'''
+    CROP_XYWH = (783, 546, 23, 19)

@@ -7,3 +7,4 @@ siren6_helper/*
 *.zip
 out/*
 captures/*
+.venv/*

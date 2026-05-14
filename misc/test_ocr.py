@@ -193,13 +193,6 @@ def find_shop_price_candidates(itemlist, category, price, price_kind, dungeon):
     return sort_shop_price_candidates(candidates)
 
 
-def find_all_shop_price_candidates(itemlist, price, price_kind, dungeon):
-    candidates = []
-    for category in ("kusa", "makimono", "udewa", "tubo", "okou", "tue"):
-        candidates.extend(find_shop_price_candidates(itemlist, category, price, price_kind, dungeon))
-    return sort_shop_price_candidates(candidates)
-
-
 def format_candidate(candidate):
     item, detail, price_state = candidate
     price_state_text = f"({price_state})" if price_state else ""
@@ -256,8 +249,8 @@ def resolve_candidates(itemlist, shop_result, dungeon):
             "candidates": [format_candidate(candidate) for candidate in candidates],
         }
 
-    category = detect_shop_item_category(shop_result.item_text)
-    candidates = find_shop_price_candidates(itemlist, category, shop_result.price, shop_result.price_kind, dungeon) if category else find_all_shop_price_candidates(itemlist, shop_result.price, shop_result.price_kind, dungeon)
+    category = detect_shop_item_category(shop_result.item_text) or shop_result.category_hint
+    candidates = find_shop_price_candidates(itemlist, category, shop_result.price, shop_result.price_kind, dungeon) if category else []
     return {
         "category": category,
         "category_label": ITEM_CATEGORY_LABELS.get(category, category) if category else None,
@@ -293,6 +286,7 @@ def print_result(result):
         print(f"  item_text: {shop_result['item_text']}")
         print(f"  price_kind: {shop_result['price_kind']}")
         print(f"  price: {shop_result['price']}")
+        print(f"  category_hint: {shop_result.get('category_hint')} score={shop_result.get('category_hint_score')}")
         print(f"  raw_texts: {shop_result['raw_texts']}")
     else:
         print("  判定なし")

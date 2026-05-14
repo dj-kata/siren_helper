@@ -7,24 +7,17 @@ srcs=$(wildcard *.py) $(wildcard *.pyw) $(wildcard src/*.py) $(wildcard misc/*.p
 html_files=$(wildcard template/*.html)
 version=$(shell head -n1 version.txt)
 
-# all: $(target_zip)
-top: $(target)
+top: $(target_zip)
 all: $(target_zip)
 
-$(target_zip): $(target) $(html_files) version.txt
+$(target_zip): $(target) version.txt
 	@rm -rf $(target_zip)
-	@cp version.txt $(project_name)
-	@cp -a template $(project_name)
-	@cp songinfo.infdc $(project_name)
 	@rm -rf $(project_name)/log
 	@rm -rf $(project_name)/*.json
 	@zip -r $(target_zip) $(project_name)/*
 
-$(target): $(srcs)
-	@rm -rf $(project_name)
+$(target): $(srcs) $(html_files) $(project_name).pyw
 	@$(wuv) run setup.py build
-	@cp songinfo.infdc $(project_name)
-	@echo "不要なファイルを削除中..."
 
 # 	# Tcl/Tk関連
 # 	@rm -rf $(project_name)/share/tcl8.6/tzdata

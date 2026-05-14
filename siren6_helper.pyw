@@ -1160,6 +1160,7 @@ class MainWindow(MainWindowUI):
             normalize_ocr_text(result.item_text),
             result.price_kind,
             result.price,
+            getattr(result, "category_hint", None),
             self.selected_dungeon_key,
             self.item_identification_revision,
         )
@@ -1169,11 +1170,13 @@ class MainWindow(MainWindowUI):
             return
         self.last_shop_result_signature = signature
         logger.info(
-            "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s raw=%s",
+            "店OCR: 判定結果 item=%r normalized=%r kind=%s price=%s category_hint=%s score=%.4f raw=%s",
             result.item_text,
             normalize_ocr_text(result.item_text),
             result.price_kind,
             result.price,
+            getattr(result, "category_hint", None),
+            getattr(result, "category_hint_score", 0.0),
             result.raw_texts,
         )
         self.apply_shop_price_result(result)
@@ -1254,31 +1257,29 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state()
             return
 
-        category = self.detect_shop_item_category(result.item_text)
+        text_category = self.detect_shop_item_category(result.item_text)
+        icon_category = getattr(result, "category_hint", None)
+        category = text_category or icon_category
         if not category:
-            candidates = self.find_all_shop_price_candidates(result.price, result.price_kind)
-            self.broadcast_shop_price_state(result, None, candidates)
             logger.info(
-                "店OCR: 種別不明の価格候補 ocr=%r normalized=%r price=%s kind=%s candidates=%s",
+                "店OCR: 種別判定失敗 ocr=%r normalized=%r price=%s kind=%s icon_category=%s icon_score=%.4f",
                 result.item_text,
                 self.normalize_item_match_text(result.item_text),
                 result.price,
                 result.price_kind,
-                tuple(self.format_shop_candidate(candidate) for candidate in candidates),
+                icon_category,
+                getattr(result, "category_hint_score", 0.0),
             )
-            self.select_shop_candidate_items(candidates)
-            if candidates:
-                names = [self.format_shop_candidate(candidate) for candidate in candidates]
-                preview = "、".join(names[:8])
-                suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
-                price_label = "売値" if result.price_kind == "sell" else "買値"
-                self.statusBar().showMessage(
-                    f"店OCR候補: 種別不明 {price_label}{result.price} -> {preview}{suffix}",
-                    8000,
-                )
-            else:
-                self.statusBar().showMessage(f"店OCR候補なし: 種別不明 {result.price}G", 5000)
+            self.hide_shop_price_state()
+            self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
             return
+        if icon_category and not text_category:
+            logger.info(
+                "店OCR: アイコン種別を採用 category=%s score=%.4f item=%r",
+                category,
+                getattr(result, "category_hint_score", 0.0),
+                result.item_text,
+            )
 
         candidates = self.find_shop_price_candidates(category, result.price, result.price_kind)
         self.remember_shop_price_candidates(result, category, candidates)
@@ -1387,12 +1388,6 @@ class MainWindow(MainWindowUI):
             if item.get or item.default_get:
                 continue
             candidates.extend(self.find_item_price_candidates(item, price, price_kind))
-        return self.sort_shop_price_candidates(candidates)
-
-    def find_all_shop_price_candidates(self, price, price_kind):
-        candidates = []
-        for category in STAT_CATEGORIES:
-            candidates.extend(self.find_shop_price_candidates(category, price, price_kind))
         return self.sort_shop_price_candidates(candidates)
 
     def find_manual_shop_price_candidates(self, category, price, price_kind):
@@ -1705,15 +1700,6 @@ class MainWindow(MainWindowUI):
             selected_rows.append(row)
         if selected_rows:
             table.scrollToItem(table.item(selected_rows[0], 0))
-
-    def select_shop_candidate_items(self, candidates):
-        categories = {}
-        for item, _detail, _price_state in candidates:
-            categories.setdefault(item.category.name, []).append(item)
-        for category in ITEM_CATEGORIES:
-            if category in categories:
-                self.select_items_in_table(category, categories[category])
-                return
 
     def broadcast_capture_state(self):
         if not self.websocket_server:
