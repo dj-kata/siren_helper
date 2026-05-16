@@ -73,6 +73,9 @@ class Config:
         # UI
         self.language = "ja"
         self.debug_mode = False
+        self.dosukoi_alert_enabled = False
+        self.dosukoi_alert_volume = 100
+        self.dosukoi_alert_threshold = 130
 
         self.load_config()
         set_debug_logging_enabled(self.debug_mode)
@@ -128,6 +131,21 @@ class Config:
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.language = config_data.get("language", self.language)
             self.debug_mode = bool(config_data.get("debug_mode", self.debug_mode))
+            self.dosukoi_alert_enabled = bool(
+                config_data.get("dosukoi_alert_enabled", self.dosukoi_alert_enabled)
+            )
+            self.dosukoi_alert_volume = clamp_int(
+                config_data.get("dosukoi_alert_volume", self.dosukoi_alert_volume),
+                self.dosukoi_alert_volume,
+                0,
+                100,
+            )
+            self.dosukoi_alert_threshold = clamp_int(
+                config_data.get("dosukoi_alert_threshold", self.dosukoi_alert_threshold),
+                self.dosukoi_alert_threshold,
+                120,
+                200,
+            )
         except Exception as e:
             logger.error(traceback.format_exc())
             print(f"設定ファイル読み込みエラー: {e}")
@@ -163,6 +181,9 @@ class Config:
             "websocket_data_port": self.websocket_data_port,
             "language": self.language,
             "debug_mode": self.debug_mode,
+            "dosukoi_alert_enabled": self.dosukoi_alert_enabled,
+            "dosukoi_alert_volume": self.dosukoi_alert_volume,
+            "dosukoi_alert_threshold": self.dosukoi_alert_threshold,
         }
 
         try:

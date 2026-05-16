@@ -109,6 +109,24 @@ class ConfigDialog(QDialog):
         form.addRow(self.ui.feature.main_font_size, self.main_font_size_spin)
 
         layout.addWidget(general_group)
+
+        dosukoi_group = QGroupBox(self.ui.feature.dosukoi_alert_group)
+        dosukoi_form = QFormLayout()
+        dosukoi_group.setLayout(dosukoi_form)
+
+        self.dosukoi_alert_enabled_check = QCheckBox(self.ui.feature.dosukoi_alert_enabled)
+        dosukoi_form.addRow(self.dosukoi_alert_enabled_check)
+
+        self.dosukoi_alert_volume_combo = QComboBox()
+        for volume in range(0, 101, 20):
+            self.dosukoi_alert_volume_combo.addItem(f"{volume}", volume)
+        dosukoi_form.addRow(self.ui.feature.dosukoi_alert_volume, self.dosukoi_alert_volume_combo)
+
+        self.dosukoi_alert_threshold_spin = QSpinBox()
+        self.dosukoi_alert_threshold_spin.setRange(120, 200)
+        dosukoi_form.addRow(self.ui.feature.dosukoi_alert_threshold, self.dosukoi_alert_threshold_spin)
+
+        layout.addWidget(dosukoi_group)
         layout.addStretch()
         return widget
 
@@ -131,6 +149,10 @@ class ConfigDialog(QDialog):
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.debug_mode_check.setChecked(self.config.debug_mode)
+        self.dosukoi_alert_enabled_check.setChecked(self.config.dosukoi_alert_enabled)
+        volume_index = self.dosukoi_alert_volume_combo.findData(self.config.dosukoi_alert_volume)
+        self.dosukoi_alert_volume_combo.setCurrentIndex(volume_index if volume_index >= 0 else 5)
+        self.dosukoi_alert_threshold_spin.setValue(self.config.dosukoi_alert_threshold)
         self.main_font_size_spin.setValue(self.config.main_font_size)
 
     def accept(self):
@@ -148,6 +170,9 @@ class ConfigDialog(QDialog):
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
         self.config.debug_mode = self.debug_mode_check.isChecked()
         set_debug_logging_enabled(self.config.debug_mode)
+        self.config.dosukoi_alert_enabled = self.dosukoi_alert_enabled_check.isChecked()
+        self.config.dosukoi_alert_volume = self.dosukoi_alert_volume_combo.currentData()
+        self.config.dosukoi_alert_threshold = self.dosukoi_alert_threshold_spin.value()
         self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()
         logger.info("設定を保存しました")

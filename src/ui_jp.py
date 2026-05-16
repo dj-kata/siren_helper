@@ -85,6 +85,10 @@ class UIText:
         keep_on_top = '常に最前面表示する'
         debug_mode = 'デバッグモード（ログファイル・OCR確認画像を出力する）'
         main_font_size = 'メイン画面のフォントサイズ:'
+        dosukoi_alert_group = 'ドスコイアラート設定'
+        dosukoi_alert_enabled = 'ドスコイアラートを有効にする'
+        dosukoi_alert_volume = 'ドスコイアラート音量:'
+        dosukoi_alert_threshold = 'アラート上限しきい値:'
     
     class music_pack:
         """楽曲パック設定タブ"""

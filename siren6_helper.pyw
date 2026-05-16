@@ -52,7 +52,7 @@ startup_trace("start")
 
 from PySide6.QtCore import QTimer, Qt, Signal, QUrl
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
-from PySide6.QtMultimedia import QSoundEffect
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 from PIL import Image
 startup_trace("imported PySide6")
@@ -254,6 +254,7 @@ class MainWindow(MainWindowUI):
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
         self.manpuku_warning_sound = None
+        self.manpuku_warning_audio_output = None
         self.manpuku_warning_active = False
         self.manpuku_warning_sound_error_logged = False
         self.last_manpuku_warning_state = None
@@ -398,6 +399,9 @@ class MainWindow(MainWindowUI):
         self.config.load_config()
         self.obs_manager.set_config(self.config)
         self.capture_interval = self.config.obs_capture_interval_seconds
+        self.apply_manpuku_warning_volume()
+        if not self.config.dosukoi_alert_enabled:
+            self.stop_manpuku_warning()
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
         self.apply_main_font()
@@ -1046,7 +1050,8 @@ class MainWindow(MainWindowUI):
             result["screen"] = screen
             result["dungeon_result"] = self.read_dungeon_from_screen(screen)
             result["shop_result"] = self.read_shop_from_screen(screen)
-            result["manpuku_result"] = self.read_manpuku_from_screen(screen)
+            if self.config.dosukoi_alert_enabled:
+                result["manpuku_result"] = self.read_manpuku_from_screen(screen)
         except Exception:
             result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
@@ -1170,6 +1175,8 @@ class MainWindow(MainWindowUI):
             return None
 
     def read_manpuku_from_screen(self, screen):
+        if not self.config.dosukoi_alert_enabled:
+            return None
         try:
             return self.manpuku_ocr_reader.read(screen)
         except Exception:
@@ -1181,17 +1188,32 @@ class MainWindow(MainWindowUI):
             logger.warning("満腹度警告音ファイルが見つかりません: %s", MANPUKU_WARNING_SOUND_PATH)
             return
 
-        sound = QSoundEffect(self)
-        sound.setSource(QUrl.fromLocalFile(str(MANPUKU_WARNING_SOUND_PATH.resolve())))
-        sound.setLoopCount(QSoundEffect.Infinite)
-        sound.setVolume(1.0)
-        self.manpuku_warning_sound = sound
+        audio_output = QAudioOutput(self)
+        audio_output.setVolume(self.manpuku_warning_volume())
+
+        player = QMediaPlayer(self)
+        player.setAudioOutput(audio_output)
+        player.setSource(QUrl.fromLocalFile(str(MANPUKU_WARNING_SOUND_PATH.resolve())))
+        player.setLoops(QMediaPlayer.Infinite.value)
+        self.manpuku_warning_audio_output = audio_output
+        self.manpuku_warning_sound = player
+
+    def manpuku_warning_volume(self):
+        return max(0.0, min(1.0, self.config.dosukoi_alert_volume / 100))
+
+    def apply_manpuku_warning_volume(self):
+        if self.manpuku_warning_audio_output:
+            self.manpuku_warning_audio_output.setVolume(self.manpuku_warning_volume())
 
     def handle_manpuku_ocr_result(self, result):
+        if not self.config.dosukoi_alert_enabled:
+            self.stop_manpuku_warning()
+            return
+
         should_warn = bool(
             result
             and result.maximum >= 150
-            and 120 <= result.current <= 130
+            and 120 <= result.current <= self.config.dosukoi_alert_threshold
         )
         state = (
             result.current if result else None,
