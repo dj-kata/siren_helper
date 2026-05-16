@@ -64,6 +64,7 @@ build_exe_options = {
         "PySide6.QtGui", 
         "PySide6.QtWidgets",
         "PySide6.QtMultimedia",
+        "PySide6.QtNetwork",
         "obsws_python",  # OBS WebSocket連携に必要
         "websocket",     # obsws_pythonの依存関係（websocket-client）
         "websockets",
@@ -145,7 +146,6 @@ build_exe_options = {
         "setuptools",
         "pip",
         # PySide6の不要なモジュール
-        "PySide6.QtNetwork",
         "PySide6.QtOpenGL",
         "PySide6.QtPrintSupport",
         "PySide6.QtQml",
