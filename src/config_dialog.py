@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
@@ -115,16 +116,22 @@ class ConfigDialog(QDialog):
         dosukoi_group.setLayout(dosukoi_form)
 
         self.dosukoi_alert_enabled_check = QCheckBox(self.ui.feature.dosukoi_alert_enabled)
-        dosukoi_form.addRow(self.dosukoi_alert_enabled_check)
+        self.dosukoi_alert_threshold_spin = QSpinBox()
+        self.dosukoi_alert_threshold_spin.setRange(120, 200)
+        dosukoi_alert_layout = QHBoxLayout()
+        dosukoi_alert_layout.addWidget(self.dosukoi_alert_enabled_check)
+        dosukoi_alert_layout.addStretch()
+        dosukoi_alert_layout.addWidget(QLabel(self.ui.feature.dosukoi_alert_threshold))
+        dosukoi_alert_layout.addWidget(self.dosukoi_alert_threshold_spin)
+        dosukoi_form.addRow(dosukoi_alert_layout)
+
+        self.entou_alert_enabled_check = QCheckBox(self.ui.feature.entou_alert_enabled)
+        dosukoi_form.addRow(self.entou_alert_enabled_check)
 
         self.dosukoi_alert_volume_combo = QComboBox()
         for volume in range(0, 101, 20):
             self.dosukoi_alert_volume_combo.addItem(f"{volume}", volume)
         dosukoi_form.addRow(self.ui.feature.dosukoi_alert_volume, self.dosukoi_alert_volume_combo)
-
-        self.dosukoi_alert_threshold_spin = QSpinBox()
-        self.dosukoi_alert_threshold_spin.setRange(120, 200)
-        dosukoi_form.addRow(self.ui.feature.dosukoi_alert_threshold, self.dosukoi_alert_threshold_spin)
 
         layout.addWidget(dosukoi_group)
         layout.addStretch()
@@ -153,6 +160,7 @@ class ConfigDialog(QDialog):
         volume_index = self.dosukoi_alert_volume_combo.findData(self.config.dosukoi_alert_volume)
         self.dosukoi_alert_volume_combo.setCurrentIndex(volume_index if volume_index >= 0 else 5)
         self.dosukoi_alert_threshold_spin.setValue(self.config.dosukoi_alert_threshold)
+        self.entou_alert_enabled_check.setChecked(self.config.entou_alert_enabled)
         self.main_font_size_spin.setValue(self.config.main_font_size)
 
     def accept(self):
@@ -173,6 +181,7 @@ class ConfigDialog(QDialog):
         self.config.dosukoi_alert_enabled = self.dosukoi_alert_enabled_check.isChecked()
         self.config.dosukoi_alert_volume = self.dosukoi_alert_volume_combo.currentData()
         self.config.dosukoi_alert_threshold = self.dosukoi_alert_threshold_spin.value()
+        self.config.entou_alert_enabled = self.entou_alert_enabled_check.isChecked()
         self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()
         logger.info("設定を保存しました")

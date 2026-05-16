@@ -85,10 +85,11 @@ class UIText:
         keep_on_top = 'Always on Top'
         debug_mode = 'Debug mode (write log files and OCR debug images)'
         main_font_size = 'Main window font size:'
-        dosukoi_alert_group = 'Dosukoi Alert'
+        dosukoi_alert_group = 'Alert'
         dosukoi_alert_enabled = 'Enable Dosukoi alert'
-        dosukoi_alert_volume = 'Dosukoi alert volume:'
-        dosukoi_alert_threshold = 'Alert upper threshold:'
+        dosukoi_alert_volume = 'Alert volume:'
+        dosukoi_alert_threshold = 'Dosukoi alert threshold:'
+        entou_alert_enabled = 'Enable Throwing status alert'
     
     class music_pack:
         """Music pack settings tab"""

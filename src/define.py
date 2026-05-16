@@ -68,3 +68,7 @@ class PosItemIcons:
 class PosManpukuNumbers:
     '''満腹度読み取り用'''
     CROP_XYWH = (630, 65, 233, 40)
+
+class PosStatusStrings:
+    '''状態文字列読み取り用'''
+    CROP_XYWH = (1065, 970, 470, 80)

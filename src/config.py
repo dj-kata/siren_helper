@@ -76,6 +76,7 @@ class Config:
         self.dosukoi_alert_enabled = False
         self.dosukoi_alert_volume = 100
         self.dosukoi_alert_threshold = 130
+        self.entou_alert_enabled = False
 
         self.load_config()
         set_debug_logging_enabled(self.debug_mode)
@@ -146,6 +147,9 @@ class Config:
                 120,
                 200,
             )
+            self.entou_alert_enabled = bool(
+                config_data.get("entou_alert_enabled", self.entou_alert_enabled)
+            )
         except Exception as e:
             logger.error(traceback.format_exc())
             print(f"設定ファイル読み込みエラー: {e}")
@@ -184,6 +188,7 @@ class Config:
             "dosukoi_alert_enabled": self.dosukoi_alert_enabled,
             "dosukoi_alert_volume": self.dosukoi_alert_volume,
             "dosukoi_alert_threshold": self.dosukoi_alert_threshold,
+            "entou_alert_enabled": self.entou_alert_enabled,
         }
 
         try:

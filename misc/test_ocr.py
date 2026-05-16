@@ -23,6 +23,7 @@ from src.define import DetectOnShop, PosManpukuNumbers, PosMyItemPrice, PosShopI
 from src.dungeon_ocr import DungeonOcrReader, normalize_ocr_text
 from src.item import ItemList
 from src.shop_ocr import ShopOcrReader, extract_price, normalize_price_text
+from src.status_ocr import StatusOcrReader
 
 
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
@@ -249,6 +250,21 @@ def inspect_manpuku_crops(shop_reader, image):
     }
 
 
+def inspect_status_crops(status_reader, image):
+    result = status_reader.read(image)
+    if not result:
+        return {
+            "is_entou": False,
+            "lines": [],
+            "raw_texts": [],
+        }
+    return {
+        "is_entou": result.is_entou,
+        "lines": list(result.lines),
+        "raw_texts": list(result.raw_texts),
+    }
+
+
 def resolve_candidates(itemlist, shop_result, dungeon):
     if not shop_result or shop_result.price is None:
         return {
@@ -300,6 +316,12 @@ def print_result(result):
     if manpuku["detected"]:
         print(f"満腹度: {manpuku['current']}/{manpuku['maximum']} raw={manpuku['raw_texts']}")
 
+    status = result["status"]
+    print("状態:")
+    print(f"  遠投状態: {status['is_entou']}")
+    print(f"  lines: {status['lines']}")
+    print(f"  raw: {status['raw_texts']}")
+
     shop = result["shop_inspection"]
     print("ショップ/アイテム画面:")
     print(f"  アイテム画面らしい: {shop['is_item_screen']}")
@@ -341,6 +363,7 @@ def main():
     config = SimpleNamespace(debug_mode=args.debug_crops)
     dungeon_reader = DungeonOcrReader(config)
     shop_reader = ShopOcrReader(config)
+    status_reader = StatusOcrReader(config)
     itemlist = ItemList()
     dungeons = load_dungeons()
 
@@ -360,6 +383,7 @@ def main():
 
         shop_inspection = inspect_shop_crops(shop_reader, image)
         manpuku = inspect_manpuku_crops(shop_reader, image)
+        status = inspect_status_crops(status_reader, image)
         shop_result = shop_reader.read(image)
         candidate_info = resolve_candidates(itemlist, shop_result, matched_dungeon)
 
@@ -371,6 +395,7 @@ def main():
             "use_gpu": False,
             "dungeon": dungeon,
             "manpuku": manpuku,
+            "status": status,
             "shop_inspection": shop_inspection,
             "shop_result": asdict(shop_result) if shop_result else None,
             "candidate_info": candidate_info,

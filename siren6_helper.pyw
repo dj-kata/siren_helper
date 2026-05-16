@@ -98,6 +98,8 @@ from src.obs_websocket_manager import OBSWebSocketManager
 startup_trace("imported src.obs_websocket_manager")
 from src.shop_ocr import ShopOcrReader
 startup_trace("imported src.shop_ocr")
+from src.status_ocr import StatusOcrReader
+startup_trace("imported src.status_ocr")
 from src.websocket_server import DataWebSocketServer
 startup_trace("imported src.websocket_server")
 
@@ -130,6 +132,7 @@ EQUIPMENT_BUY_CORRECTION_UNIT = 100
 EQUIPMENT_SELL_CORRECTION_UNIT = 40
 SHOP_PRICE_HIDE_GRACE_SECONDS = 4.0
 MANPUKU_WARNING_SOUND_PATH = Path("data/sound/Warning-Siren04-02(Low-Long).mp3")
+ENTOU_STATUS_CLEAR_MISSES = 3
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
     "makimono": "巻物",
@@ -255,11 +258,14 @@ class MainWindow(MainWindowUI):
         self.dungeon_ocr_interval = 3.0
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
+        self.status_ocr_reader = StatusOcrReader(self.config)
         self.manpuku_warning_sound = None
         self.manpuku_warning_audio_output = None
         self.manpuku_warning_active = False
         self.manpuku_warning_sound_error_logged = False
         self.last_manpuku_warning_state = None
+        self.entou_warning_latched = False
+        self.entou_status_miss_count = 0
         self.last_shop_result_signature = None
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
@@ -402,7 +408,7 @@ class MainWindow(MainWindowUI):
         self.obs_manager.set_config(self.config)
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.apply_manpuku_warning_volume()
-        if not self.config.dosukoi_alert_enabled:
+        if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
             self.stop_manpuku_warning()
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
@@ -1064,6 +1070,7 @@ class MainWindow(MainWindowUI):
             "hide_monster_floor": False,
             "shop_result": None,
             "manpuku_result": None,
+            "status_result": None,
         }
         try:
             screen = self.capture_game_screen()
@@ -1077,6 +1084,8 @@ class MainWindow(MainWindowUI):
             result["shop_result"] = self.read_shop_from_screen(screen)
             if self.config.dosukoi_alert_enabled:
                 result["manpuku_result"] = self.read_manpuku_from_screen(screen)
+            if self.config.entou_alert_enabled:
+                result["status_result"] = self.read_status_from_screen(screen)
         except Exception:
             result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
@@ -1114,7 +1123,10 @@ class MainWindow(MainWindowUI):
             else:
                 self.hide_shop_price_state_if_stale()
 
-            self.handle_manpuku_ocr_result(result.get("manpuku_result"))
+            self.handle_manpuku_ocr_result(
+                result.get("manpuku_result"),
+                result.get("status_result"),
+            )
 
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1225,6 +1237,15 @@ class MainWindow(MainWindowUI):
             logger.error(f"満腹度OCRエラー: {traceback.format_exc()}")
             return None
 
+    def read_status_from_screen(self, screen):
+        if not self.config.entou_alert_enabled:
+            return None
+        try:
+            return self.status_ocr_reader.read(screen)
+        except Exception:
+            logger.error(f"状態OCRエラー: {traceback.format_exc()}")
+            return None
+
     def init_manpuku_warning_sound(self):
         if not MANPUKU_WARNING_SOUND_PATH.exists():
             logger.warning("満腹度警告音ファイルが見つかりません: %s", MANPUKU_WARNING_SOUND_PATH)
@@ -1247,12 +1268,81 @@ class MainWindow(MainWindowUI):
         if self.manpuku_warning_audio_output:
             self.manpuku_warning_audio_output.setVolume(self.manpuku_warning_volume())
 
-    def handle_manpuku_ocr_result(self, result):
-        if not self.config.dosukoi_alert_enabled:
+    def handle_manpuku_ocr_result(self, result, status_result=None):
+        if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
+            self.entou_warning_latched = False
+            self.entou_status_miss_count = 0
             self.stop_manpuku_warning()
             return
 
+        if not self.config.entou_alert_enabled:
+            self.entou_warning_latched = False
+            self.entou_status_miss_count = 0
+            status_result = None
+
+        is_entou = bool(status_result and status_result.is_entou)
+        if is_entou:
+            self.entou_warning_latched = True
+            self.entou_status_miss_count = 0
+            state = (
+                getattr(result, "current", None),
+                getattr(result, "maximum", None),
+                "start_entou",
+                status_result.lines,
+            )
+            if state != self.last_manpuku_warning_state:
+                logger.info(
+                    "満腹度警告判定: 遠投状態のため開始 current=%s maximum=%s status_lines=%s status_raw=%s",
+                    getattr(result, "current", None),
+                    getattr(result, "maximum", None),
+                    status_result.lines,
+                    status_result.raw_texts,
+                )
+                self.last_manpuku_warning_state = state
+            self.start_manpuku_warning()
+            return
+
+        if self.entou_warning_latched:
+            if status_result is None:
+                if self.manpuku_warning_active:
+                    self.start_manpuku_warning()
+                return
+
+            self.entou_status_miss_count += 1
+            if self.entou_status_miss_count < ENTOU_STATUS_CLEAR_MISSES:
+                state = (
+                    getattr(result, "current", None),
+                    getattr(result, "maximum", None),
+                    "keep_entou",
+                    self.entou_status_miss_count,
+                    status_result.lines,
+                )
+                if state != self.last_manpuku_warning_state:
+                    logger.info(
+                        "満腹度警告判定: 遠投状態解除待ち miss=%s/%s status_lines=%s status_raw=%s",
+                        self.entou_status_miss_count,
+                        ENTOU_STATUS_CLEAR_MISSES,
+                        status_result.lines,
+                        status_result.raw_texts,
+                    )
+                    self.last_manpuku_warning_state = state
+                self.start_manpuku_warning()
+                return
+
+            logger.info(
+                "満腹度警告判定: 遠投状態を解除 miss=%s/%s status_lines=%s status_raw=%s",
+                self.entou_status_miss_count,
+                ENTOU_STATUS_CLEAR_MISSES,
+                status_result.lines,
+                status_result.raw_texts,
+            )
+            self.entou_warning_latched = False
+            self.entou_status_miss_count = 0
+
         if result is None:
+            if not self.config.dosukoi_alert_enabled:
+                self.stop_manpuku_warning()
+                return
             if self.last_manpuku_warning_state != (None, None, "ocr_miss"):
                 logger.info("満腹度警告判定: OCR結果なし。現在の警告状態を維持します")
                 self.last_manpuku_warning_state = (None, None, "ocr_miss")
