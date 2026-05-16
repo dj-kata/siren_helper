@@ -50,8 +50,9 @@ def startup_trace(message):
 
 startup_trace("start")
 
-from PySide6.QtCore import QTimer, Qt, Signal
+from PySide6.QtCore import QTimer, Qt, Signal, QUrl
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
+from PySide6.QtMultimedia import QSoundEffect
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 from PIL import Image
 startup_trace("imported PySide6")
@@ -89,6 +90,8 @@ from src.logger import get_logger
 startup_trace("imported src.logger")
 from src.main_window import MainWindowUI
 startup_trace("imported src.main_window")
+from src.manpuku_ocr import ManpukuOcrReader
+startup_trace("imported src.manpuku_ocr")
 from src.obs_dialog import OBSControlDialog
 startup_trace("imported src.obs_dialog")
 from src.obs_websocket_manager import OBSWebSocketManager
@@ -126,6 +129,7 @@ EQUIPMENT_PRICE_CORRECTION_MAX = 99
 EQUIPMENT_BUY_CORRECTION_UNIT = 100
 EQUIPMENT_SELL_CORRECTION_UNIT = 40
 SHOP_PRICE_HIDE_GRACE_SECONDS = 4.0
+MANPUKU_WARNING_SOUND_PATH = Path("data/sound/Warning-Siren04-02(Low-Long).mp3")
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
     "makimono": "巻物",
@@ -248,6 +252,11 @@ class MainWindow(MainWindowUI):
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 3.0
         self.shop_ocr_reader = ShopOcrReader(self.config)
+        self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
+        self.manpuku_warning_sound = None
+        self.manpuku_warning_active = False
+        self.manpuku_warning_sound_error_logged = False
+        self.last_manpuku_warning_state = None
         self.last_shop_result_signature = None
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
@@ -261,6 +270,7 @@ class MainWindow(MainWindowUI):
         self.websocket_loop = None
         self.websocket_thread = None
         self.start_websocket_server()
+        self.init_manpuku_warning_sound()
 
         self.init_ui()
         self.apply_main_font()
@@ -1026,6 +1036,7 @@ class MainWindow(MainWindowUI):
             "capture_failed": False,
             "dungeon_result": None,
             "shop_result": None,
+            "manpuku_result": None,
         }
         try:
             screen = self.capture_game_screen()
@@ -1035,6 +1046,7 @@ class MainWindow(MainWindowUI):
             result["screen"] = screen
             result["dungeon_result"] = self.read_dungeon_from_screen(screen)
             result["shop_result"] = self.read_shop_from_screen(screen)
+            result["manpuku_result"] = self.read_manpuku_from_screen(screen)
         except Exception:
             result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
@@ -1069,6 +1081,8 @@ class MainWindow(MainWindowUI):
                 self.handle_shop_ocr_result(shop_result)
             else:
                 self.hide_shop_price_state_if_stale()
+
+            self.handle_manpuku_ocr_result(result.get("manpuku_result"))
 
             self.capture_count += 1
             self.last_capture_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1154,6 +1168,73 @@ class MainWindow(MainWindowUI):
         except Exception:
             logger.error(f"店OCRエラー: {traceback.format_exc()}")
             return None
+
+    def read_manpuku_from_screen(self, screen):
+        try:
+            return self.manpuku_ocr_reader.read(screen)
+        except Exception:
+            logger.error(f"満腹度OCRエラー: {traceback.format_exc()}")
+            return None
+
+    def init_manpuku_warning_sound(self):
+        if not MANPUKU_WARNING_SOUND_PATH.exists():
+            logger.warning("満腹度警告音ファイルが見つかりません: %s", MANPUKU_WARNING_SOUND_PATH)
+            return
+
+        sound = QSoundEffect(self)
+        sound.setSource(QUrl.fromLocalFile(str(MANPUKU_WARNING_SOUND_PATH.resolve())))
+        sound.setLoopCount(QSoundEffect.Infinite)
+        sound.setVolume(1.0)
+        self.manpuku_warning_sound = sound
+
+    def handle_manpuku_ocr_result(self, result):
+        should_warn = bool(
+            result
+            and result.maximum >= 150
+            and 120 <= result.current <= 130
+        )
+        state = (
+            result.current if result else None,
+            result.maximum if result else None,
+            should_warn,
+        )
+        if state != self.last_manpuku_warning_state:
+            if result:
+                logger.info(
+                    "満腹度警告判定: current=%s maximum=%s warning=%s raw=%s",
+                    result.current,
+                    result.maximum,
+                    should_warn,
+                    result.raw_texts,
+                )
+            else:
+                logger.info("満腹度警告判定: OCR結果なし warning=False")
+            self.last_manpuku_warning_state = state
+
+        if should_warn:
+            self.start_manpuku_warning()
+        else:
+            self.stop_manpuku_warning()
+
+    def start_manpuku_warning(self):
+        if self.manpuku_warning_active:
+            return
+        if not self.manpuku_warning_sound:
+            if not self.manpuku_warning_sound_error_logged:
+                logger.warning("満腹度警告音を再生できません。音声ファイル未設定です。")
+                self.manpuku_warning_sound_error_logged = True
+            return
+        self.manpuku_warning_sound.play()
+        self.manpuku_warning_active = True
+        logger.info("満腹度警告音を開始しました")
+
+    def stop_manpuku_warning(self):
+        if not self.manpuku_warning_active:
+            return
+        if self.manpuku_warning_sound:
+            self.manpuku_warning_sound.stop()
+        self.manpuku_warning_active = False
+        logger.info("満腹度警告音を停止しました")
 
     def handle_shop_ocr_result(self, result):
         signature = (
@@ -1767,6 +1848,7 @@ class MainWindow(MainWindowUI):
 
     def closeEvent(self, event):
         self.execute_obs_triggers("app_end")
+        self.stop_manpuku_warning()
         self.remove_global_hotkeys()
         self.main_timer.stop()
         self.display_timer.stop()

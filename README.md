@@ -123,6 +123,8 @@ https://github.com/dj-kata/siren_helper
 ```
 
 # その他
+SE: [OtoLogic](https://otologic.jp)様
+
 シレン5用のツールはこちら。  
 https://github.com/dj-kata/siren_helper/releases/tag/v.1.0.1
 

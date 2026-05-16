@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict
 from difflib import SequenceMatcher
@@ -18,13 +19,15 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import OCR_CAPTURE_RESOLUTION, OCR_CAPTURE_SIZE
-from src.define import DetectOnShop, PosMyItemPrice, PosShopItemPrice
+from src.define import DetectOnShop, PosManpukuNumbers, PosMyItemPrice, PosShopItemPrice
 from src.dungeon_ocr import DungeonOcrReader, normalize_ocr_text
 from src.item import ItemList
-from src.shop_ocr import ShopOcrReader, extract_price
+from src.shop_ocr import ShopOcrReader, extract_price, normalize_price_text
 
 
 ITEM_CATEGORIES = ["kusa", "makimono", "udewa", "tubo", "okou", "tue", "buki", "tate"]
+MANPUKU_LABEL = "満腹度"
+NUMBER_PATTERN = re.compile(r"\d+")
 MIN_IDENTIFIED_ITEM_MATCH_SCORE = 0.82
 EQUIPMENT_PRICE_CORRECTION_MAX = 99
 EQUIPMENT_BUY_CORRECTION_UNIT = 100
@@ -226,6 +229,26 @@ def inspect_shop_crops(shop_reader, image):
     }
 
 
+def inspect_manpuku_crops(shop_reader, image):
+    texts = shop_reader._read_crop(image, PosManpukuNumbers.CROP_XYWH, "PosManpukuNumbers")
+    raw_texts = [text.text for text in texts]
+    joined_text = normalize_price_text("".join(raw_texts))
+    numbers = [
+        int(match.group(0))
+        for match in NUMBER_PATTERN.finditer(joined_text)
+    ]
+    current = numbers[0] if len(numbers) >= 2 else None
+    maximum = numbers[1] if len(numbers) >= 2 else None
+
+    return {
+        "detected": current is not None and maximum is not None,
+        "label": MANPUKU_LABEL if current is not None and maximum is not None else None,
+        "current": current,
+        "maximum": maximum,
+        "raw_texts": raw_texts,
+    }
+
+
 def resolve_candidates(itemlist, shop_result, dungeon):
     if not shop_result or shop_result.price is None:
         return {
@@ -272,6 +295,10 @@ def print_result(result):
         print(f"  score: {dungeon['score']:.3f}")
     else:
         print("  判定なし")
+
+    manpuku = result["manpuku"]
+    if manpuku["detected"]:
+        print(f"満腹度: {manpuku['current']}/{manpuku['maximum']} raw={manpuku['raw_texts']}")
 
     shop = result["shop_inspection"]
     print("ショップ/アイテム画面:")
@@ -332,6 +359,7 @@ def main():
             matched_dungeon = next((data for data in dungeons if data["key"] == dungeon_result.dungeon_key), None)
 
         shop_inspection = inspect_shop_crops(shop_reader, image)
+        manpuku = inspect_manpuku_crops(shop_reader, image)
         shop_result = shop_reader.read(image)
         candidate_info = resolve_candidates(itemlist, shop_result, matched_dungeon)
 
@@ -342,6 +370,7 @@ def main():
             "resolution": OCR_CAPTURE_RESOLUTION,
             "use_gpu": False,
             "dungeon": dungeon,
+            "manpuku": manpuku,
             "shop_inspection": shop_inspection,
             "shop_result": asdict(shop_result) if shop_result else None,
             "candidate_info": candidate_info,

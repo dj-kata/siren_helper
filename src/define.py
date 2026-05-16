@@ -64,3 +64,7 @@ class PosMyItems:
 class PosItemIcons:
     '''アイテムカテゴリ判別用。アイテム名左のアイコンを切り取る。'''
     CROP_XYWH = (783, 546, 23, 19)
+
+class PosManpukuNumbers:
+    '''満腹度読み取り用'''
+    CROP_XYWH = (630, 65, 233, 40)
