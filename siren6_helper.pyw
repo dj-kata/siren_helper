@@ -162,6 +162,7 @@ SHOP_CATEGORY_HINTS = {
     "盾": "tate",
 }
 DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
+MONSTER_FLOOR_DUNGEON_KEYS = {"toguro_shinzui", "cho_shinzui"}
 INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
 MONSTER_ICON_FILENAME_MAP_PATH = Path("data/monster_icon_filenames.json")
@@ -235,6 +236,7 @@ class MainWindow(MainWindowUI):
         self.itemlist.load(self.siren_settings.params)
         self.monster_icon_filename_map = self.load_monster_icon_filename_map()
         self.dungeons = self.load_dungeon_filters()
+        self.dungeon_ocr_targets = self.load_dungeon_filters(include_disabled=True)
         self.selected_dungeon_key = self.default_dungeon_key()
 
         self.obs_manager = OBSWebSocketManager()
@@ -465,7 +467,7 @@ class MainWindow(MainWindowUI):
         self.reset_button.clicked.connect(self.reset_identification)
         self.update_item_tables()
 
-    def load_dungeon_filters(self):
+    def load_dungeon_filters(self, include_disabled=False):
         dungeon_dir = Path("data/6_dungeons")
         if not dungeon_dir.exists():
             return []
@@ -485,7 +487,7 @@ class MainWindow(MainWindowUI):
                 logger.warning(f"ダンジョンデータの読み込みに失敗しました: {path}")
                 continue
             key = data.get("key") or path.stem
-            if key in DISABLED_DUNGEON_KEYS:
+            if not include_disabled and key in DISABLED_DUNGEON_KEYS:
                 continue
 
             item_names_by_category = {category: set() for category in ITEM_CATEGORIES}
@@ -744,6 +746,19 @@ class MainWindow(MainWindowUI):
             else None,
         }
 
+    def hidden_monster_floor_payload(self, dungeon_key="", dungeon_name=""):
+        return {
+            "hidden": True,
+            "dungeon_key": dungeon_key or "",
+            "dungeon_name": dungeon_name or "",
+            "floor": None,
+            "floor_label": "",
+            "visibility": "",
+            "groups": [],
+            "monsters": [],
+            "next_floor": None,
+        }
+
     def monster_floor_groups(self, floor):
         return [
             {
@@ -777,6 +792,13 @@ class MainWindow(MainWindowUI):
         if not self.websocket_server:
             return
         self.websocket_server.update_monster_floor_data(self.current_monster_floor_payload())
+
+    def hide_monster_floor_state(self, dungeon_key="", dungeon_name=""):
+        if not self.websocket_server:
+            return
+        self.websocket_server.update_monster_floor_data(
+            self.hidden_monster_floor_payload(dungeon_key, dungeon_name)
+        )
 
     def format_floor_label(self, floor):
         return f"{floor}F" if isinstance(floor, int) else str(floor)
@@ -1039,6 +1061,7 @@ class MainWindow(MainWindowUI):
             "screen": None,
             "capture_failed": False,
             "dungeon_result": None,
+            "hide_monster_floor": False,
             "shop_result": None,
             "manpuku_result": None,
         }
@@ -1048,7 +1071,9 @@ class MainWindow(MainWindowUI):
                 result["capture_failed"] = True
                 return
             result["screen"] = screen
-            result["dungeon_result"] = self.read_dungeon_from_screen(screen)
+            dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen)
+            result["dungeon_result"] = dungeon_result
+            result["hide_monster_floor"] = hide_monster_floor
             result["shop_result"] = self.read_shop_from_screen(screen)
             if self.config.dosukoi_alert_enabled:
                 result["manpuku_result"] = self.read_manpuku_from_screen(screen)
@@ -1080,6 +1105,8 @@ class MainWindow(MainWindowUI):
             dungeon_result = result.get("dungeon_result")
             if dungeon_result:
                 self.apply_detected_dungeon_floor(dungeon_result.dungeon_key, dungeon_result.floor)
+            elif result.get("hide_monster_floor"):
+                self.hide_monster_floor_state()
 
             shop_result = result.get("shop_result")
             if shop_result:
@@ -1100,28 +1127,43 @@ class MainWindow(MainWindowUI):
                 self.capture_worker_running = False
 
     def update_dungeon_selection_from_screen(self, screen):
-        result = self.read_dungeon_from_screen(screen)
+        result, hide_monster_floor = self.read_dungeon_from_screen(screen)
         if result:
             self.apply_detected_dungeon_floor(result.dungeon_key, result.floor)
+        elif hide_monster_floor:
+            self.hide_monster_floor_state()
 
     def read_dungeon_from_screen(self, screen):
         now = time.monotonic()
         if now - self.last_dungeon_ocr_time < self.dungeon_ocr_interval:
-            return None
+            return None, False
         self.last_dungeon_ocr_time = now
 
         try:
-            result = self.dungeon_ocr_reader.read(screen, self.dungeons)
-            if not result:
-                return None
-            return result
+            read = self.dungeon_ocr_reader.read_detail(screen, self.dungeon_ocr_targets)
+            if not read.result:
+                return None, read.floor is not None
+            return read.result, False
         except Exception:
             logger.error(f"ダンジョンOCRエラー: {traceback.format_exc()}")
-            return None
+            return None, False
 
     def apply_detected_dungeon_floor(self, dungeon_key, floor):
+        if dungeon_key not in MONSTER_FLOOR_DUNGEON_KEYS:
+            dungeon_name = next(
+                (
+                    dungeon.get("name", "")
+                    for dungeon in self.dungeon_ocr_targets
+                    if dungeon.get("key") == dungeon_key
+                ),
+                "",
+            )
+            self.hide_monster_floor_state(dungeon_key, dungeon_name)
+            return
+
         dungeon_index = self.dungeon_combo.findData(dungeon_key) if self.dungeon_combo else -1
         if dungeon_index < 0:
+            self.hide_monster_floor_state(dungeon_key)
             return
 
         previous_floor = self.current_monster_floor()

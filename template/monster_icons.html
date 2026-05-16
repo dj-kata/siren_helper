@@ -51,6 +51,10 @@ body {
   background: var(--bg);
 }
 
+body.hidden .overlay {
+  display: none;
+}
+
 .header {
   display: flex;
   align-items: baseline;
@@ -524,6 +528,14 @@ function render(data) {
 }
 
 function renderData(data) {
+  if (data.hidden) {
+    document.body.classList.add("hidden");
+    title.textContent = "";
+    visibility.textContent = "";
+    groups.replaceChildren();
+    return;
+  }
+  document.body.classList.remove("hidden");
   title.textContent = `${data.dungeon_name || "--"} ${data.floor_label || ""}`;
   visibility.textContent = data.visibility ? `視界 ${data.visibility}` : "";
   groups.replaceChildren();

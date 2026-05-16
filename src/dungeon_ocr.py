@@ -25,6 +25,14 @@ class DungeonOcrResult:
     score: float
 
 
+@dataclass(frozen=True)
+class DungeonOcrRead:
+    result: DungeonOcrResult | None
+    floor: int | None
+    raw_text: str
+    score: float
+
+
 def normalize_ocr_text(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text or "")
     normalized = normalized.replace("髓", "髄").replace("随", "髄")
@@ -78,8 +86,11 @@ class DungeonOcrReader:
         return bool(getattr(self.config, "debug_mode", False))
 
     def read(self, screen, dungeons: list[dict]) -> DungeonOcrResult | None:
+        return self.read_detail(screen, dungeons).result
+
+    def read_detail(self, screen, dungeons: list[dict]) -> DungeonOcrRead:
         if screen is None or not dungeons:
-            return None
+            return DungeonOcrRead(None, None, "", 0.0)
 
         raw_text = self._read_text(screen)
         floor = extract_floor(raw_text)
@@ -92,15 +103,16 @@ class DungeonOcrReader:
             score,
         )
         if floor is None or not dungeon:
-            return None
+            return DungeonOcrRead(None, floor, raw_text, score)
 
-        return DungeonOcrResult(
+        result = DungeonOcrResult(
             dungeon_key=dungeon["key"],
             dungeon_name=dungeon["name"],
             floor=floor,
             raw_text=raw_text,
             score=score,
         )
+        return DungeonOcrRead(result, floor, raw_text, score)
 
     def _read_text(self, screen) -> str:
         import cv2
