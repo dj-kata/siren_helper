@@ -132,7 +132,7 @@ EQUIPMENT_BUY_CORRECTION_UNIT = 100
 EQUIPMENT_SELL_CORRECTION_UNIT = 40
 SHOP_PRICE_HIDE_GRACE_SECONDS = 4.0
 MANPUKU_WARNING_SOUND_PATH = Path("data/sound/Warning-Siren04-02(Low-Long).mp3")
-ENTOU_STATUS_CLEAR_MISSES = 3
+ENTOU_STATUS_CLEAR_MISSES = 2
 ITEM_CATEGORY_LABELS = {
     "kusa": "草",
     "makimono": "巻物",
@@ -264,6 +264,7 @@ class MainWindow(MainWindowUI):
         self.manpuku_warning_active = False
         self.manpuku_warning_sound_error_logged = False
         self.last_manpuku_warning_state = None
+        self.manpuku_warning_status_message = ""
         self.entou_warning_latched = False
         self.entou_status_miss_count = 0
         self.last_shop_result_signature = None
@@ -1280,6 +1281,7 @@ class MainWindow(MainWindowUI):
             self.entou_status_miss_count = 0
             status_result = None
 
+        entou_status_message = ""
         is_entou = bool(status_result and status_result.is_entou)
         if is_entou:
             self.entou_warning_latched = True
@@ -1299,49 +1301,53 @@ class MainWindow(MainWindowUI):
                     status_result.raw_texts,
                 )
                 self.last_manpuku_warning_state = state
-            self.start_manpuku_warning()
-            return
+            entou_status_message = "遠投状態アラート: 遠投状態を検出しました"
 
         if self.entou_warning_latched:
-            self.entou_status_miss_count += 1
-            if self.entou_status_miss_count < ENTOU_STATUS_CLEAR_MISSES:
-                status_lines = status_result.lines if status_result else ()
-                status_raw_texts = status_result.raw_texts if status_result else ()
-                state = (
-                    getattr(result, "current", None),
-                    getattr(result, "maximum", None),
-                    "keep_entou",
-                    self.entou_status_miss_count,
-                    status_lines,
-                )
-                if state != self.last_manpuku_warning_state:
+            if is_entou:
+                pass
+            else:
+                self.entou_status_miss_count += 1
+                if self.entou_status_miss_count < ENTOU_STATUS_CLEAR_MISSES:
+                    status_lines = status_result.lines if status_result else ()
+                    status_raw_texts = status_result.raw_texts if status_result else ()
+                    state = (
+                        getattr(result, "current", None),
+                        getattr(result, "maximum", None),
+                        "keep_entou",
+                        self.entou_status_miss_count,
+                        status_lines,
+                    )
+                    if state != self.last_manpuku_warning_state:
+                        logger.info(
+                            "満腹度警告判定: 遠投状態解除待ち miss=%s/%s status_lines=%s status_raw=%s",
+                            self.entou_status_miss_count,
+                            ENTOU_STATUS_CLEAR_MISSES,
+                            status_lines,
+                            status_raw_texts,
+                        )
+                        self.last_manpuku_warning_state = state
+                    entou_status_message = "遠投状態アラート: 遠投状態を検出しました"
+                else:
+                    status_lines = status_result.lines if status_result else ()
+                    status_raw_texts = status_result.raw_texts if status_result else ()
                     logger.info(
-                        "満腹度警告判定: 遠投状態解除待ち miss=%s/%s status_lines=%s status_raw=%s",
+                        "満腹度警告判定: 遠投状態を解除 miss=%s/%s status_lines=%s status_raw=%s",
                         self.entou_status_miss_count,
                         ENTOU_STATUS_CLEAR_MISSES,
                         status_lines,
                         status_raw_texts,
                     )
-                    self.last_manpuku_warning_state = state
-                self.start_manpuku_warning()
-                return
-
-            status_lines = status_result.lines if status_result else ()
-            status_raw_texts = status_result.raw_texts if status_result else ()
-            logger.info(
-                "満腹度警告判定: 遠投状態を解除 miss=%s/%s status_lines=%s status_raw=%s",
-                self.entou_status_miss_count,
-                ENTOU_STATUS_CLEAR_MISSES,
-                status_lines,
-                status_raw_texts,
-            )
-            self.entou_warning_latched = False
-            self.entou_status_miss_count = 0
-            if result is None:
-                self.stop_manpuku_warning()
-                return
+                    self.entou_warning_latched = False
+                    self.entou_status_miss_count = 0
+                    if result is None:
+                        self.stop_manpuku_warning()
+                        return
 
         if result is None:
+            if entou_status_message:
+                self.start_manpuku_warning(entou_status_message)
+                return
             if not self.config.dosukoi_alert_enabled:
                 self.stop_manpuku_warning()
                 return
@@ -1379,13 +1385,23 @@ class MainWindow(MainWindowUI):
             self.last_manpuku_warning_state = state
 
         if should_start:
-            self.start_manpuku_warning()
+            messages = []
+            if entou_status_message:
+                messages.append(entou_status_message)
+            messages.append(f"ドスコイアラート: 満腹度 {result.current}/{result.maximum}")
+            self.start_manpuku_warning(" / ".join(messages))
+        elif entou_status_message:
+            self.start_manpuku_warning(entou_status_message)
         elif should_stop:
             self.stop_manpuku_warning()
         elif self.manpuku_warning_active:
             self.start_manpuku_warning()
 
-    def start_manpuku_warning(self):
+    def start_manpuku_warning(self, status_message=None):
+        if status_message:
+            self.manpuku_warning_status_message = status_message
+        if self.manpuku_warning_status_message:
+            self.statusBar().showMessage(self.manpuku_warning_status_message)
         if self.manpuku_warning_active:
             if (
                 self.manpuku_warning_sound
@@ -1405,11 +1421,20 @@ class MainWindow(MainWindowUI):
 
     def stop_manpuku_warning(self):
         if not self.manpuku_warning_active:
+            self.clear_manpuku_warning_status_message()
             return
         if self.manpuku_warning_sound:
             self.manpuku_warning_sound.stop()
         self.manpuku_warning_active = False
+        self.clear_manpuku_warning_status_message()
         logger.info("満腹度警告音を停止しました")
+
+    def clear_manpuku_warning_status_message(self):
+        if not self.manpuku_warning_status_message:
+            return
+        if self.statusBar().currentMessage() == self.manpuku_warning_status_message:
+            self.statusBar().clearMessage()
+        self.manpuku_warning_status_message = ""
 
     def handle_shop_ocr_result(self, result):
         signature = (
