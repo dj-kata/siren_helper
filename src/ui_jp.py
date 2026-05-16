@@ -249,6 +249,8 @@ class UIText:
         '''OBS制御設定におけるタイミング'''
         app_start = "アプリ起動時"
         app_end = "アプリ終了時"
+        dosukoi_alert = "ドスコイアラート状態"
+        entou_alert = "遠投状態"
 
     class obs_action:
         '''OBS制御設定におけるアクション'''

@@ -44,6 +44,8 @@ class OBSControlDialog(QDialog):
         self.TIMINGS = [
             ("app_start"   , self.ui.obs_timing.app_start),
             ("app_end"     , self.ui.obs_timing.app_end),
+            ("dosukoi_alert", self.ui.obs_timing.dosukoi_alert),
+            ("entou_alert"  , self.ui.obs_timing.entou_alert),
         ]
         self.TIMING_IDS = {timing_id for timing_id, _ in self.TIMINGS}
     

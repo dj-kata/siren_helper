@@ -267,6 +267,8 @@ class MainWindow(MainWindowUI):
         self.manpuku_warning_status_message = ""
         self.entou_warning_latched = False
         self.entou_status_miss_count = 0
+        self.obs_dosukoi_alert_trigger_active = False
+        self.obs_entou_alert_trigger_active = False
         self.last_shop_result_signature = None
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
@@ -1273,6 +1275,7 @@ class MainWindow(MainWindowUI):
         if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
+            self.update_obs_alert_triggers(False, False)
             self.stop_manpuku_warning()
             return
 
@@ -1341,16 +1344,20 @@ class MainWindow(MainWindowUI):
                     self.entou_warning_latched = False
                     self.entou_status_miss_count = 0
                     if result is None:
+                        self.update_obs_alert_triggers(False, False)
                         self.stop_manpuku_warning()
                         return
 
         if result is None:
             if entou_status_message:
+                self.update_obs_alert_triggers(False, True)
                 self.start_manpuku_warning(entou_status_message)
                 return
             if not self.config.dosukoi_alert_enabled:
+                self.update_obs_alert_triggers(False, False)
                 self.stop_manpuku_warning()
                 return
+            self.update_obs_alert_triggers(False, False)
             if self.last_manpuku_warning_state != (None, None, "ocr_miss"):
                 logger.info("満腹度警告判定: OCR結果なし。現在の警告状態を維持します")
                 self.last_manpuku_warning_state = (None, None, "ocr_miss")
@@ -1389,13 +1396,25 @@ class MainWindow(MainWindowUI):
             if entou_status_message:
                 messages.append(entou_status_message)
             messages.append(f"ドスコイアラート: 満腹度 {result.current}/{result.maximum}")
+            self.update_obs_alert_triggers(True, bool(entou_status_message))
             self.start_manpuku_warning(" / ".join(messages))
         elif entou_status_message:
+            self.update_obs_alert_triggers(False, True)
             self.start_manpuku_warning(entou_status_message)
         elif should_stop:
+            self.update_obs_alert_triggers(False, False)
             self.stop_manpuku_warning()
         elif self.manpuku_warning_active:
+            self.update_obs_alert_triggers(False, False)
             self.start_manpuku_warning()
+
+    def update_obs_alert_triggers(self, dosukoi_active: bool, entou_active: bool):
+        if dosukoi_active and not self.obs_dosukoi_alert_trigger_active:
+            self.execute_obs_triggers("dosukoi_alert")
+        if entou_active and not self.obs_entou_alert_trigger_active:
+            self.execute_obs_triggers("entou_alert")
+        self.obs_dosukoi_alert_trigger_active = dosukoi_active
+        self.obs_entou_alert_trigger_active = entou_active
 
     def start_manpuku_warning(self, status_message=None):
         if status_message:
@@ -1996,7 +2015,7 @@ class MainWindow(MainWindowUI):
 
     def execute_obs_triggers(self, trigger: str):
         """指定されたトリガーのOBS制御を実行"""
-        if trigger not in ("app_start", "app_end"):
+        if trigger not in ("app_start", "app_end", "dosukoi_alert", "entou_alert"):
             return
         if not self.config.obs_enabled:
             return

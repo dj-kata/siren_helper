@@ -248,6 +248,8 @@ class UIText:
         '''timing for obs control settings'''
         app_start = "app start"
         app_end = "app exit"
+        dosukoi_alert = "Dosukoi alert active"
+        entou_alert = "Throwing status active"
 
     class obs_action:
         '''action for obs control settings'''
