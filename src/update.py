@@ -368,11 +368,11 @@ def main():
 
     updater = GitHubUpdater(
         github_author='dj-kata',
-        github_repo='pkch_helper',
-        zipfile_basename='pkch_helper',
+        github_repo='siren_helper',
+        zipfile_basename='siren6_helper',
         current_version=SWVER,           # 現在のバージョン
-        main_exe_name="pkch_helper.exe",  # メインプログラムのexe名
-        updator_exe_name="pkch_helper.exe",           # アップデート用プログラムのexe名
+        main_exe_name="siren6_helper.exe",  # メインプログラムのexe名
+        updator_exe_name="siren6_helper.exe",           # アップデート用プログラムのexe名
     )
     
     # メインプログラムから呼び出す場合
