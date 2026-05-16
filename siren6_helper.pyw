@@ -1303,41 +1303,43 @@ class MainWindow(MainWindowUI):
             return
 
         if self.entou_warning_latched:
-            if status_result is None:
-                if self.manpuku_warning_active:
-                    self.start_manpuku_warning()
-                return
-
             self.entou_status_miss_count += 1
             if self.entou_status_miss_count < ENTOU_STATUS_CLEAR_MISSES:
+                status_lines = status_result.lines if status_result else ()
+                status_raw_texts = status_result.raw_texts if status_result else ()
                 state = (
                     getattr(result, "current", None),
                     getattr(result, "maximum", None),
                     "keep_entou",
                     self.entou_status_miss_count,
-                    status_result.lines,
+                    status_lines,
                 )
                 if state != self.last_manpuku_warning_state:
                     logger.info(
                         "満腹度警告判定: 遠投状態解除待ち miss=%s/%s status_lines=%s status_raw=%s",
                         self.entou_status_miss_count,
                         ENTOU_STATUS_CLEAR_MISSES,
-                        status_result.lines,
-                        status_result.raw_texts,
+                        status_lines,
+                        status_raw_texts,
                     )
                     self.last_manpuku_warning_state = state
                 self.start_manpuku_warning()
                 return
 
+            status_lines = status_result.lines if status_result else ()
+            status_raw_texts = status_result.raw_texts if status_result else ()
             logger.info(
                 "満腹度警告判定: 遠投状態を解除 miss=%s/%s status_lines=%s status_raw=%s",
                 self.entou_status_miss_count,
                 ENTOU_STATUS_CLEAR_MISSES,
-                status_result.lines,
-                status_result.raw_texts,
+                status_lines,
+                status_raw_texts,
             )
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
+            if result is None:
+                self.stop_manpuku_warning()
+                return
 
         if result is None:
             if not self.config.dosukoi_alert_enabled:

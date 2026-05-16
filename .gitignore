@@ -8,3 +8,4 @@ siren6_helper/*
 out/*
 captures/*
 .venv/*
+src/*.egg-info/*
