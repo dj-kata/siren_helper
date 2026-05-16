@@ -1210,36 +1210,55 @@ class MainWindow(MainWindowUI):
             self.stop_manpuku_warning()
             return
 
-        should_warn = bool(
+        if result is None:
+            if self.last_manpuku_warning_state != (None, None, "ocr_miss"):
+                logger.info("満腹度警告判定: OCR結果なし。現在の警告状態を維持します")
+                self.last_manpuku_warning_state = (None, None, "ocr_miss")
+            if self.manpuku_warning_active:
+                self.start_manpuku_warning()
+            return
+
+        should_start = bool(
             result
             and result.maximum >= 150
             and 120 <= result.current <= self.config.dosukoi_alert_threshold
         )
+        should_stop = (
+            result.maximum < 150
+            or result.current < 120
+            or result.current > self.config.dosukoi_alert_threshold
+        )
+        action = "start" if should_start else "stop" if should_stop else "keep"
         state = (
-            result.current if result else None,
-            result.maximum if result else None,
-            should_warn,
+            result.current,
+            result.maximum,
+            action,
         )
         if state != self.last_manpuku_warning_state:
-            if result:
-                logger.info(
-                    "満腹度警告判定: current=%s maximum=%s warning=%s raw=%s",
-                    result.current,
-                    result.maximum,
-                    should_warn,
-                    result.raw_texts,
-                )
-            else:
-                logger.info("満腹度警告判定: OCR結果なし warning=False")
+            logger.info(
+                "満腹度警告判定: current=%s maximum=%s action=%s raw=%s",
+                result.current,
+                result.maximum,
+                action,
+                result.raw_texts,
+            )
             self.last_manpuku_warning_state = state
 
-        if should_warn:
+        if should_start:
             self.start_manpuku_warning()
-        else:
+        elif should_stop:
             self.stop_manpuku_warning()
+        elif self.manpuku_warning_active:
+            self.start_manpuku_warning()
 
     def start_manpuku_warning(self):
         if self.manpuku_warning_active:
+            if (
+                self.manpuku_warning_sound
+                and self.manpuku_warning_sound.playbackState() != QMediaPlayer.PlayingState
+            ):
+                self.manpuku_warning_sound.play()
+                logger.info("満腹度警告音を再開しました")
             return
         if not self.manpuku_warning_sound:
             if not self.manpuku_warning_sound_error_logged:
