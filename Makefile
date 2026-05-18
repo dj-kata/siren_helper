@@ -6,17 +6,18 @@ target_zip=$(project_name).zip
 srcs=$(wildcard *.py) $(wildcard *.pyw) $(wildcard src/*.py) $(wildcard misc/*.py)
 html_files=$(wildcard template/*.html)
 version=$(shell head -n1 version.txt)
+ZIP ?= 7z a -tzip -mx=1 -mmt=on
 
 top: $(target_zip)
 all: $(target_zip)
 
-$(target_zip): $(target) version.txt
+$(target_zip): $(target)
 	@rm -rf $(target_zip)
 	@rm -rf $(project_name)/log
 	@rm -rf $(project_name)/*.json
-	@zip -r $(target_zip) $(project_name)/*
+	$(ZIP) $(target_zip) $(project_name)
 
-$(target): $(srcs) $(html_files) $(project_name).pyw
+$(target): $(srcs) $(html_files) $(project_name).pyw version.txt
 	@$(wuv) run setup.py build
 
 # 	# Tcl/Tk関連
