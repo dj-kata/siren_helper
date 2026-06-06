@@ -73,6 +73,8 @@ class Config:
         # UI
         self.language = "ja"
         self.debug_mode = False
+        self.dungeon_ocr_enabled = True
+        self.shop_ocr_enabled = True
         self.dosukoi_alert_enabled = False
         self.dosukoi_alert_volume = 100
         self.dosukoi_alert_threshold = 130
@@ -132,6 +134,12 @@ class Config:
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.language = config_data.get("language", self.language)
             self.debug_mode = bool(config_data.get("debug_mode", self.debug_mode))
+            self.dungeon_ocr_enabled = bool(
+                config_data.get("dungeon_ocr_enabled", self.dungeon_ocr_enabled)
+            )
+            self.shop_ocr_enabled = bool(
+                config_data.get("shop_ocr_enabled", self.shop_ocr_enabled)
+            )
             self.dosukoi_alert_enabled = bool(
                 config_data.get("dosukoi_alert_enabled", self.dosukoi_alert_enabled)
             )
@@ -185,6 +193,8 @@ class Config:
             "websocket_data_port": self.websocket_data_port,
             "language": self.language,
             "debug_mode": self.debug_mode,
+            "dungeon_ocr_enabled": self.dungeon_ocr_enabled,
+            "shop_ocr_enabled": self.shop_ocr_enabled,
             "dosukoi_alert_enabled": self.dosukoi_alert_enabled,
             "dosukoi_alert_volume": self.dosukoi_alert_volume,
             "dosukoi_alert_threshold": self.dosukoi_alert_threshold,
@@ -220,6 +230,8 @@ class Config:
                 "websocket_data_port": self.websocket_data_port,
                 "language": self.language,
                 "debug_mode": self.debug_mode,
+                "dungeon_ocr_enabled": self.dungeon_ocr_enabled,
+                "shop_ocr_enabled": self.shop_ocr_enabled,
             },
             ensure_ascii=False,
             indent=2,

@@ -1081,10 +1081,12 @@ class MainWindow(MainWindowUI):
                 result["capture_failed"] = True
                 return
             result["screen"] = screen
-            dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen)
-            result["dungeon_result"] = dungeon_result
-            result["hide_monster_floor"] = hide_monster_floor
-            result["shop_result"] = self.read_shop_from_screen(screen)
+            if self.config.dungeon_ocr_enabled:
+                dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen)
+                result["dungeon_result"] = dungeon_result
+                result["hide_monster_floor"] = hide_monster_floor
+            if self.config.shop_ocr_enabled:
+                result["shop_result"] = self.read_shop_from_screen(screen)
             if self.config.dosukoi_alert_enabled:
                 result["manpuku_result"] = self.read_manpuku_from_screen(screen)
             if self.config.entou_alert_enabled:
@@ -1149,6 +1151,9 @@ class MainWindow(MainWindowUI):
             self.hide_monster_floor_state()
 
     def read_dungeon_from_screen(self, screen):
+        if not self.config.dungeon_ocr_enabled:
+            return None, False
+
         now = time.monotonic()
         if now - self.last_dungeon_ocr_time < self.dungeon_ocr_interval:
             return None, False
@@ -1222,6 +1227,9 @@ class MainWindow(MainWindowUI):
             self.hide_shop_price_state_if_stale()
 
     def read_shop_from_screen(self, screen):
+        if not self.config.shop_ocr_enabled:
+            return None
+
         try:
             result = self.shop_ocr_reader.read(screen)
             if not result:

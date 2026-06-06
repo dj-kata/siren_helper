@@ -85,19 +85,6 @@ class ConfigDialog(QDialog):
         self.websocket_data_port_edit.setValidator(QIntValidator(1000, 65535))
         form.addRow(self.ui.feature.websocket_port, self.websocket_data_port_edit)
 
-        self.capture_mode_combo = QComboBox()
-        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_none, CAPTURE_MODE_NONE)
-        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_obs, CAPTURE_MODE_OBS)
-        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_direct, CAPTURE_MODE_DIRECT)
-        form.addRow(self.ui.feature.capture_mode, self.capture_mode_combo)
-
-        self.obs_capture_interval_spin = QDoubleSpinBox()
-        self.obs_capture_interval_spin.setRange(1.0, 30.0)
-        self.obs_capture_interval_spin.setSingleStep(0.5)
-        self.obs_capture_interval_spin.setDecimals(1)
-        self.obs_capture_interval_spin.setSuffix(" sec")
-        form.addRow(self.ui.feature.obs_capture_interval, self.obs_capture_interval_spin)
-
         self.keep_on_top_check = QCheckBox(self.ui.feature.keep_on_top)
         form.addRow(self.keep_on_top_check)
 
@@ -114,6 +101,25 @@ class ConfigDialog(QDialog):
         dosukoi_group = QGroupBox(self.ui.feature.dosukoi_alert_group)
         dosukoi_form = QFormLayout()
         dosukoi_group.setLayout(dosukoi_form)
+
+        self.capture_mode_combo = QComboBox()
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_none, CAPTURE_MODE_NONE)
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_obs, CAPTURE_MODE_OBS)
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_direct, CAPTURE_MODE_DIRECT)
+        dosukoi_form.addRow(self.ui.feature.capture_mode, self.capture_mode_combo)
+
+        self.obs_capture_interval_spin = QDoubleSpinBox()
+        self.obs_capture_interval_spin.setRange(1.0, 30.0)
+        self.obs_capture_interval_spin.setSingleStep(0.5)
+        self.obs_capture_interval_spin.setDecimals(1)
+        self.obs_capture_interval_spin.setSuffix(" sec")
+        dosukoi_form.addRow(self.ui.feature.obs_capture_interval, self.obs_capture_interval_spin)
+
+        self.dungeon_ocr_enabled_check = QCheckBox(self.ui.feature.dungeon_ocr_enabled)
+        dosukoi_form.addRow(self.dungeon_ocr_enabled_check)
+
+        self.shop_ocr_enabled_check = QCheckBox(self.ui.feature.shop_ocr_enabled)
+        dosukoi_form.addRow(self.shop_ocr_enabled_check)
 
         self.dosukoi_alert_enabled_check = QCheckBox(self.ui.feature.dosukoi_alert_enabled)
         self.dosukoi_alert_threshold_spin = QSpinBox()
@@ -156,6 +162,8 @@ class ConfigDialog(QDialog):
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.debug_mode_check.setChecked(self.config.debug_mode)
+        self.dungeon_ocr_enabled_check.setChecked(self.config.dungeon_ocr_enabled)
+        self.shop_ocr_enabled_check.setChecked(self.config.shop_ocr_enabled)
         self.dosukoi_alert_enabled_check.setChecked(self.config.dosukoi_alert_enabled)
         volume_index = self.dosukoi_alert_volume_combo.findData(self.config.dosukoi_alert_volume)
         self.dosukoi_alert_volume_combo.setCurrentIndex(volume_index if volume_index >= 0 else 5)
@@ -178,6 +186,8 @@ class ConfigDialog(QDialog):
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
         self.config.debug_mode = self.debug_mode_check.isChecked()
         set_debug_logging_enabled(self.config.debug_mode)
+        self.config.dungeon_ocr_enabled = self.dungeon_ocr_enabled_check.isChecked()
+        self.config.shop_ocr_enabled = self.shop_ocr_enabled_check.isChecked()
         self.config.dosukoi_alert_enabled = self.dosukoi_alert_enabled_check.isChecked()
         self.config.dosukoi_alert_volume = self.dosukoi_alert_volume_combo.currentData()
         self.config.dosukoi_alert_threshold = self.dosukoi_alert_threshold_spin.value()
