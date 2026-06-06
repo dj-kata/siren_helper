@@ -265,6 +265,7 @@ class MainWindow(MainWindowUI):
         self.manpuku_warning_sound_error_logged = False
         self.last_manpuku_warning_state = None
         self.manpuku_warning_status_message = ""
+        self.dosukoi_alert_target_active = False
         self.entou_warning_latched = False
         self.entou_status_miss_count = 0
         self.obs_dosukoi_alert_trigger_active = False
@@ -1281,6 +1282,7 @@ class MainWindow(MainWindowUI):
 
     def handle_manpuku_ocr_result(self, result, status_result=None):
         if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
+            self.dosukoi_alert_target_active = False
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
             self.update_obs_alert_triggers(False, False)
@@ -1362,6 +1364,7 @@ class MainWindow(MainWindowUI):
                 self.start_manpuku_warning(entou_status_message)
                 return
             if not self.config.dosukoi_alert_enabled:
+                self.dosukoi_alert_target_active = False
                 self.update_obs_alert_triggers(False, False)
                 self.stop_manpuku_warning()
                 return
@@ -1373,20 +1376,28 @@ class MainWindow(MainWindowUI):
                 self.start_manpuku_warning()
             return
 
+        if self.config.dosukoi_alert_enabled:
+            if result.current >= 150:
+                self.dosukoi_alert_target_active = True
+            elif result.current <= 120:
+                self.dosukoi_alert_target_active = False
+        else:
+            self.dosukoi_alert_target_active = False
+
         should_start = bool(
-            result
-            and result.maximum >= 150
-            and 120 <= result.current <= self.config.dosukoi_alert_threshold
+            self.dosukoi_alert_target_active
+            and 120 < result.current <= self.config.dosukoi_alert_threshold
         )
         should_stop = (
-            result.maximum < 150
-            or result.current < 120
+            not self.dosukoi_alert_target_active
+            or result.current <= 120
             or result.current > self.config.dosukoi_alert_threshold
         )
         action = "start" if should_start else "stop" if should_stop else "keep"
         state = (
             result.current,
             result.maximum,
+            self.dosukoi_alert_target_active,
             action,
         )
         if state != self.last_manpuku_warning_state:
