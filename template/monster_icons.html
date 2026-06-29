@@ -523,16 +523,15 @@ function connect() {
 }
 
 function render(data) {
+  if (data.hidden) {
+    return;
+  }
   latestData = data;
   renderData(data);
 }
 
 function renderData(data) {
   if (data.hidden) {
-    document.body.classList.add("hidden");
-    title.textContent = "";
-    visibility.textContent = "";
-    groups.replaceChildren();
     return;
   }
   document.body.classList.remove("hidden");

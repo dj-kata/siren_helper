@@ -83,11 +83,7 @@ class MainWindowUI(QMainWindow):
 
         main_layout = QVBoxLayout(central_widget)
 
-        self.top_tabs = QTabWidget()
-        main_layout.addWidget(self.top_tabs)
-
-        self.top_tabs.addTab(self.create_identification_tab(), "ダンジョン")
-        self.top_tabs.addTab(self.create_memo_tab(), "メモ")
+        main_layout.addWidget(self.create_identification_tab())
 
         self.obs_status_label = QLabel(self.ui.obs.not_connected)
         self.update_obs_status_label(False)
@@ -268,6 +264,7 @@ class MainWindowUI(QMainWindow):
         self.shop_candidate_table.setColumnWidth(1, 70)
         candidate_layout.addWidget(self.shop_candidate_table)
         self.dungeon_data_tabs.addTab(candidate_tab, "識別候補")
+        self.dungeon_data_tabs.addTab(self.create_memo_tab(), "メモ")
         layout.addWidget(self.dungeon_data_tabs)
 
         return tab

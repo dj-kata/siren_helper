@@ -189,7 +189,7 @@ class UserSettings:
             "lw": 970,
             "lh": 930,
             "memo": "",
-            "memo_const": "",
+            "memo_const": {},
             "selected_dungeon": "",
             "selected_monster_floor": 1,
         }
@@ -462,7 +462,7 @@ class MainWindow(MainWindowUI):
 
     def init_identification_ui(self):
         self.memo_edit.setPlainText(self.siren_settings.params.get("memo", ""))
-        self.memo_const_edit.setPlainText(self.siren_settings.params.get("memo_const", ""))
+        self.load_current_const_memo()
         self.init_dungeon_combo()
         for category, table in self.item_tables.items():
             table.cellDoubleClicked.connect(
@@ -556,7 +556,10 @@ class MainWindow(MainWindowUI):
         self.reset_monster_floor_filter(self.siren_settings.params.get("selected_monster_floor", 1))
 
     def on_dungeon_changed(self, *_args):
+        previous_dungeon_key = self.selected_dungeon_key
+        self.save_const_memo_for_dungeon(previous_dungeon_key)
         self.selected_dungeon_key = self.dungeon_combo.currentData() or ""
+        self.load_current_const_memo()
         self.reset_monster_floor_filter()
         self.update_item_tables()
         self.update_monster_table()
@@ -757,17 +760,7 @@ class MainWindow(MainWindowUI):
         }
 
     def hidden_monster_floor_payload(self, dungeon_key="", dungeon_name=""):
-        return {
-            "hidden": True,
-            "dungeon_key": dungeon_key or "",
-            "dungeon_name": dungeon_name or "",
-            "floor": None,
-            "floor_label": "",
-            "visibility": "",
-            "groups": [],
-            "monsters": [],
-            "next_floor": None,
-        }
+        return self.current_monster_floor_payload()
 
     def monster_floor_groups(self, floor):
         return [
@@ -806,9 +799,7 @@ class MainWindow(MainWindowUI):
     def hide_monster_floor_state(self, dungeon_key="", dungeon_name=""):
         if not self.websocket_server:
             return
-        self.websocket_server.update_monster_floor_data(
-            self.hidden_monster_floor_payload(dungeon_key, dungeon_name)
-        )
+        self.websocket_server.update_monster_floor_data(self.current_monster_floor_payload())
 
     def format_floor_label(self, floor):
         return f"{floor}F" if isinstance(floor, int) else str(floor)
@@ -982,10 +973,31 @@ class MainWindow(MainWindowUI):
     def save_identification_settings(self):
         self.itemlist.save(self.siren_settings.params)
         self.siren_settings.params["memo"] = self.memo_edit.toPlainText()
-        self.siren_settings.params["memo_const"] = self.memo_const_edit.toPlainText()
+        self.save_const_memo_for_dungeon(self.selected_dungeon_key)
         self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
         self.siren_settings.params["selected_monster_floor"] = self.current_monster_floor()
         self.siren_settings.save_settings()
+
+    def const_memos(self):
+        memos = self.siren_settings.params.get("memo_const", {})
+        if isinstance(memos, dict):
+            return memos
+
+        memos = {
+            self.selected_dungeon_key: str(memos)
+        } if memos else {}
+        self.siren_settings.params["memo_const"] = memos
+        return memos
+
+    def load_current_const_memo(self):
+        if not self.memo_const_edit:
+            return
+        self.memo_const_edit.setPlainText(str(self.const_memos().get(self.selected_dungeon_key, "")))
+
+    def save_const_memo_for_dungeon(self, dungeon_key):
+        if not self.memo_const_edit or not dungeon_key:
+            return
+        self.const_memos()[dungeon_key] = self.memo_const_edit.toPlainText()
 
     def current_monster_floor(self):
         if not self.monster_floor_combo:

@@ -309,6 +309,7 @@ class DataWebSocketServer:
 
     def update_monster_floor_data(self, data: dict):
         """選択中階層のモンスターデータを更新（同期メソッド）"""
+        self.monster_floor_data = data
         if self.loop:
             asyncio.run_coroutine_threadsafe(
                 self.broadcast_monster_floor_data(data),
