@@ -1,5 +1,5 @@
-"""座標など固定のデータをここに記載
-"""
+"""座標など固定のデータをここに記載"""
+
 from src.classes import *
 
 BASE_CAPTURE_SIZE = (1920, 1080)
@@ -13,7 +13,7 @@ LIVE_EXPLORATION_MODES = (
     LIVE_EXPLORATION_MODE_2,
     LIVE_EXPLORATION_MODE_3,
 )
-DEFAULT_LIVE_EXPLORATION_MODE = LIVE_EXPLORATION_MODE_2
+DEFAULT_LIVE_EXPLORATION_MODE = LIVE_EXPLORATION_MODE_NONE
 LIVE_EXPLORATION_MODE_LABELS = {
     LIVE_EXPLORATION_MODE_NONE: "ライブ探索モードなし",
     LIVE_EXPLORATION_MODE_1: "ライブ探索モード1",
@@ -79,23 +79,26 @@ def crop_for_ocr(screen, crop_xywh):
 
 
 class DetectOnShop:
-    '''店において買取価格表示があるかどうかを判定'''
-    CROP_XYWH = (780,580,700,50)
+    """店において買取価格表示があるかどうかを判定"""
+
+    CROP_XYWH = (780, 580, 700, 50)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
         LIVE_EXPLORATION_MODE_1: CROP_XYWH,
         LIVE_EXPLORATION_MODE_2: CROP_XYWH,
         LIVE_EXPLORATION_MODE_3: CROP_XYWH,
     }
-    target = '識別されていないのでよくわからない'
+    target = "識別されていないのでよくわからない"
 
     @classmethod
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
+
 
 class PosMyItemPrice:
-    '''手持ちアイテムの買取価格部分の切り取り'''
-    CROP_XYWH = (808,530,620,50)
+    """手持ちアイテムの買取価格部分の切り取り"""
+
+    CROP_XYWH = (808, 530, 620, 50)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
         LIVE_EXPLORATION_MODE_1: CROP_XYWH,
@@ -106,10 +109,12 @@ class PosMyItemPrice:
     @classmethod
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
+
 
 class PosShopItemPrice:
-    '''店売りアイテムの買取価格部分の切り取り'''
-    CROP_XYWH = (200,240,550,50)
+    """店売りアイテムの買取価格部分の切り取り"""
+
+    CROP_XYWH = (200, 240, 550, 50)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
         LIVE_EXPLORATION_MODE_1: CROP_XYWH,
@@ -120,10 +125,12 @@ class PosShopItemPrice:
     @classmethod
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
+
 
 class PosMyItems:
-    '''所持品一覧の切り取り(type1)'''
-    CROP_XYWH = (1600,0,320,1080)
+    """所持品一覧の切り取り(type1)"""
+
+    CROP_XYWH = (1600, 0, 320, 1080)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
         LIVE_EXPLORATION_MODE_1: CROP_XYWH,
@@ -135,8 +142,10 @@ class PosMyItems:
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
+
 class PosItemIcons:
-    '''アイテムカテゴリ判別用。アイテム名左のアイコンを切り取る。'''
+    """アイテムカテゴリ判別用。アイテム名左のアイコンを切り取る。"""
+
     CROP_XYWH = (783, 546, 23, 19)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
@@ -149,8 +158,10 @@ class PosItemIcons:
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
+
 class PosManpukuNumbers:
-    '''満腹度読み取り用'''
+    """満腹度読み取り用"""
+
     CROP_XYWH = (630, 65, 233, 40)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
@@ -163,8 +174,10 @@ class PosManpukuNumbers:
     def get(cls, live_mode=None):
         return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
+
 class PosStatusStrings:
-    '''状態文字列読み取り用'''
+    """状態文字列読み取り用"""
+
     CROP_XYWH = (1065, 970, 470, 80)
     CROP_XYWH_BY_LIVE_MODE = {
         LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
