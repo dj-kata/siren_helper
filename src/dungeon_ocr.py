@@ -4,12 +4,25 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from src.define import crop_for_ocr
+from src.define import (
+    LIVE_EXPLORATION_MODE_1,
+    LIVE_EXPLORATION_MODE_2,
+    LIVE_EXPLORATION_MODE_3,
+    LIVE_EXPLORATION_MODE_NONE,
+    crop_for_ocr,
+    normalize_live_exploration_mode,
+)
 from src.logger import get_logger
 
 
 logger = get_logger(__name__)
 DUNGEON_INFO_CROP_XYWH = (0, 0, 500, 125)
+DUNGEON_INFO_CROP_XYWH_BY_LIVE_MODE = {
+    LIVE_EXPLORATION_MODE_NONE: DUNGEON_INFO_CROP_XYWH,
+    LIVE_EXPLORATION_MODE_1: DUNGEON_INFO_CROP_XYWH,
+    LIVE_EXPLORATION_MODE_2: DUNGEON_INFO_CROP_XYWH,
+    LIVE_EXPLORATION_MODE_3: DUNGEON_INFO_CROP_XYWH,
+}
 DEBUG_CROP_PATH = Path("log") / "dungeon_ocr_crop.png"
 MIN_DUNGEON_MATCH_SCORE = 0.72
 FLOOR_PATTERN = re.compile(r"(?<!\d)(\d{1,3})\s*(?:F|階)")
@@ -85,14 +98,14 @@ class DungeonOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
-    def read(self, screen, dungeons: list[dict]) -> DungeonOcrResult | None:
-        return self.read_detail(screen, dungeons).result
+    def read(self, screen, dungeons: list[dict], live_mode=None) -> DungeonOcrResult | None:
+        return self.read_detail(screen, dungeons, live_mode).result
 
-    def read_detail(self, screen, dungeons: list[dict]) -> DungeonOcrRead:
+    def read_detail(self, screen, dungeons: list[dict], live_mode=None) -> DungeonOcrRead:
         if screen is None or not dungeons:
             return DungeonOcrRead(None, None, "", 0.0)
 
-        raw_text = self._read_text(screen)
+        raw_text = self._read_text(screen, live_mode)
         floor = extract_floor(raw_text)
         dungeon, score = match_dungeon(raw_text, dungeons)
         logger.info(
@@ -114,11 +127,14 @@ class DungeonOcrReader:
         )
         return DungeonOcrRead(result, floor, raw_text, score)
 
-    def _read_text(self, screen) -> str:
+    def _read_text(self, screen, live_mode=None) -> str:
         import cv2
         import numpy as np
 
-        crop_box, crop = crop_for_ocr(screen, DUNGEON_INFO_CROP_XYWH)
+        crop_xywh = DUNGEON_INFO_CROP_XYWH_BY_LIVE_MODE[
+            normalize_live_exploration_mode(live_mode)
+        ]
+        crop_box, crop = crop_for_ocr(screen, crop_xywh)
         self._save_debug_crop(crop)
         image = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
         result = self._engine().ocr(image, cls=False)
@@ -134,7 +150,7 @@ class DungeonOcrReader:
                     texts.append(str(text))
         logger.info(
             "ダンジョンOCR crop xywh=%s crop_box=%s crop_size=%s texts=%s",
-            DUNGEON_INFO_CROP_XYWH,
+            crop_xywh,
             crop_box,
             crop.size,
             tuple(texts),

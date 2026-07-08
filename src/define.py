@@ -3,6 +3,40 @@
 from src.classes import *
 
 BASE_CAPTURE_SIZE = (1920, 1080)
+LIVE_EXPLORATION_MODE_NONE = "type0"
+LIVE_EXPLORATION_MODE_1 = "type1"
+LIVE_EXPLORATION_MODE_2 = "type2"
+LIVE_EXPLORATION_MODE_3 = "type3"
+LIVE_EXPLORATION_MODES = (
+    LIVE_EXPLORATION_MODE_NONE,
+    LIVE_EXPLORATION_MODE_1,
+    LIVE_EXPLORATION_MODE_2,
+    LIVE_EXPLORATION_MODE_3,
+)
+DEFAULT_LIVE_EXPLORATION_MODE = LIVE_EXPLORATION_MODE_2
+LIVE_EXPLORATION_MODE_LABELS = {
+    LIVE_EXPLORATION_MODE_NONE: "ライブ探索モードなし",
+    LIVE_EXPLORATION_MODE_1: "ライブ探索モード1",
+    LIVE_EXPLORATION_MODE_2: "ライブ探索モード2",
+    LIVE_EXPLORATION_MODE_3: "ライブ探索モード3",
+}
+
+
+def normalize_live_exploration_mode(mode):
+    if mode in LIVE_EXPLORATION_MODES:
+        return mode
+    return DEFAULT_LIVE_EXPLORATION_MODE
+
+
+def live_exploration_mode_label(mode):
+    return LIVE_EXPLORATION_MODE_LABELS.get(
+        normalize_live_exploration_mode(mode),
+        LIVE_EXPLORATION_MODE_LABELS[DEFAULT_LIVE_EXPLORATION_MODE],
+    )
+
+
+def live_exploration_mode_has_status(mode):
+    return normalize_live_exploration_mode(mode) != LIVE_EXPLORATION_MODE_NONE
 
 
 def scale_xywh(crop_xywh, image_size):
@@ -47,28 +81,98 @@ def crop_for_ocr(screen, crop_xywh):
 class DetectOnShop:
     '''店において買取価格表示があるかどうかを判定'''
     CROP_XYWH = (780,580,700,50)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
     target = '識別されていないのでよくわからない'
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosMyItemPrice:
     '''手持ちアイテムの買取価格部分の切り取り'''
     CROP_XYWH = (808,530,620,50)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosShopItemPrice:
     '''店売りアイテムの買取価格部分の切り取り'''
     CROP_XYWH = (200,240,550,50)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosMyItems:
     '''所持品一覧の切り取り(type1)'''
     CROP_XYWH = (1600,0,320,1080)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosItemIcons:
     '''アイテムカテゴリ判別用。アイテム名左のアイコンを切り取る。'''
     CROP_XYWH = (783, 546, 23, 19)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosManpukuNumbers:
     '''満腹度読み取り用'''
     CROP_XYWH = (630, 65, 233, 40)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]
 
 class PosStatusStrings:
     '''状態文字列読み取り用'''
     CROP_XYWH = (1065, 970, 470, 80)
+    CROP_XYWH_BY_LIVE_MODE = {
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+    }
+
+    @classmethod
+    def get(cls, live_mode=None):
+        return cls.CROP_XYWH_BY_LIVE_MODE[normalize_live_exploration_mode(live_mode)]

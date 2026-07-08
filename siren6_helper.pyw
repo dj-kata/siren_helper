@@ -86,6 +86,8 @@ from src.funcs import escape_for_filename
 startup_trace("imported src.funcs")
 from src.item import ItemList
 startup_trace("imported src.item")
+from src.define import live_exploration_mode_has_status, live_exploration_mode_label
+from src.live_exploration_mode import detect_live_exploration_mode
 from src.logger import get_logger
 startup_trace("imported src.logger")
 from src.main_window import MainWindowUI
@@ -1082,6 +1084,7 @@ class MainWindow(MainWindowUI):
         result = {
             "screen": None,
             "capture_failed": False,
+            "live_mode": None,
             "dungeon_result": None,
             "hide_monster_floor": False,
             "shop_result": None,
@@ -1094,16 +1097,20 @@ class MainWindow(MainWindowUI):
                 result["capture_failed"] = True
                 return
             result["screen"] = screen
+            live_mode = detect_live_exploration_mode(screen)
+            result["live_mode"] = live_mode
+            logger.info("ライブ探索表示判定: %s (%s)", live_mode, live_exploration_mode_label(live_mode))
             if self.config.dungeon_ocr_enabled:
-                dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen)
+                dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen, live_mode)
                 result["dungeon_result"] = dungeon_result
                 result["hide_monster_floor"] = hide_monster_floor
             if self.config.shop_ocr_enabled:
-                result["shop_result"] = self.read_shop_from_screen(screen)
-            if self.config.dosukoi_alert_enabled:
-                result["manpuku_result"] = self.read_manpuku_from_screen(screen)
-            if self.config.entou_alert_enabled:
-                result["status_result"] = self.read_status_from_screen(screen)
+                result["shop_result"] = self.read_shop_from_screen(screen, live_mode)
+            if live_exploration_mode_has_status(live_mode):
+                if self.config.dosukoi_alert_enabled:
+                    result["manpuku_result"] = self.read_manpuku_from_screen(screen, live_mode)
+                if self.config.entou_alert_enabled:
+                    result["status_result"] = self.read_status_from_screen(screen, live_mode)
         except Exception:
             result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
@@ -1144,6 +1151,7 @@ class MainWindow(MainWindowUI):
             self.handle_manpuku_ocr_result(
                 result.get("manpuku_result"),
                 result.get("status_result"),
+                live_exploration_mode_has_status(result.get("live_mode")),
             )
 
             self.capture_count += 1
@@ -1163,7 +1171,7 @@ class MainWindow(MainWindowUI):
         elif hide_monster_floor:
             self.hide_monster_floor_state()
 
-    def read_dungeon_from_screen(self, screen):
+    def read_dungeon_from_screen(self, screen, live_mode=None):
         if not self.config.dungeon_ocr_enabled:
             return None, False
 
@@ -1173,7 +1181,7 @@ class MainWindow(MainWindowUI):
         self.last_dungeon_ocr_time = now
 
         try:
-            read = self.dungeon_ocr_reader.read_detail(screen, self.dungeon_ocr_targets)
+            read = self.dungeon_ocr_reader.read_detail(screen, self.dungeon_ocr_targets, live_mode)
             if not read.result:
                 return None, read.floor is not None
             return read.result, False
@@ -1239,12 +1247,12 @@ class MainWindow(MainWindowUI):
         else:
             self.hide_shop_price_state_if_stale()
 
-    def read_shop_from_screen(self, screen):
+    def read_shop_from_screen(self, screen, live_mode=None):
         if not self.config.shop_ocr_enabled:
             return None
 
         try:
-            result = self.shop_ocr_reader.read(screen)
+            result = self.shop_ocr_reader.read(screen, live_mode)
             if not result:
                 return None
             return result
@@ -1252,20 +1260,20 @@ class MainWindow(MainWindowUI):
             logger.error(f"店OCRエラー: {traceback.format_exc()}")
             return None
 
-    def read_manpuku_from_screen(self, screen):
+    def read_manpuku_from_screen(self, screen, live_mode=None):
         if not self.config.dosukoi_alert_enabled:
             return None
         try:
-            return self.manpuku_ocr_reader.read(screen)
+            return self.manpuku_ocr_reader.read(screen, live_mode)
         except Exception:
             logger.error(f"満腹度OCRエラー: {traceback.format_exc()}")
             return None
 
-    def read_status_from_screen(self, screen):
+    def read_status_from_screen(self, screen, live_mode=None):
         if not self.config.entou_alert_enabled:
             return None
         try:
-            return self.status_ocr_reader.read(screen)
+            return self.status_ocr_reader.read(screen, live_mode)
         except Exception:
             logger.error(f"状態OCRエラー: {traceback.format_exc()}")
             return None
@@ -1292,8 +1300,11 @@ class MainWindow(MainWindowUI):
         if self.manpuku_warning_audio_output:
             self.manpuku_warning_audio_output.setVolume(self.manpuku_warning_volume())
 
-    def handle_manpuku_ocr_result(self, result, status_result=None):
-        if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
+    def handle_manpuku_ocr_result(self, result, status_result=None, alerts_available=True):
+        if (
+            not alerts_available
+            or (not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled)
+        ):
             self.dosukoi_alert_target_active = False
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0

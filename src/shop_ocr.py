@@ -70,20 +70,20 @@ class ShopOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
-    def read(self, screen) -> ShopPriceResult | None:
+    def read(self, screen, live_mode=None) -> ShopPriceResult | None:
         if screen is None:
             logger.info("店OCR: screen is None")
             return None
 
-        has_unknown_message, has_detail_text = self.detect_shop_message_state(screen)
+        has_unknown_message, has_detail_text = self.detect_shop_message_state(screen, live_mode)
         if not has_detail_text:
             logger.info("店OCR: 説明文欄textなし。識別済みアイテム名一致確認のため価格欄OCRを継続")
         if not has_unknown_message:
             logger.info("店OCR: 未識別メッセージなし。識別済みアイテムの可能性があるため価格欄OCRを継続")
 
-        category_hint, category_hint_score = self.detect_item_category(screen)
+        category_hint, category_hint_score = self.detect_item_category(screen, live_mode)
 
-        my_texts = self._read_crop(screen, PosMyItemPrice.CROP_XYWH, "PosMyItemPrice")
+        my_texts = self._read_crop(screen, PosMyItemPrice.get(live_mode), "PosMyItemPrice")
         logger.info("店OCR: 手持ち欄 text_count=%s", len(my_texts))
         if len(my_texts) >= 2:
             price = extract_price(my_texts[-1].text)
@@ -111,7 +111,7 @@ class ShopOcrReader:
 
         detail_item_text = my_texts[0].text if can_use_name_only_identification(my_texts[0].text) else ""
 
-        shop_texts = self._read_crop(screen, PosShopItemPrice.CROP_XYWH, "PosShopItemPrice")
+        shop_texts = self._read_crop(screen, PosShopItemPrice.get(live_mode), "PosShopItemPrice")
         logger.info("店OCR: 店売り欄 text_count=%s", len(shop_texts))
         if len(shop_texts) != 2:
             logger.info("店OCR: 店売り欄のtext数が想定外 raw=%s", tuple(text.text for text in shop_texts))
@@ -169,12 +169,12 @@ class ShopOcrReader:
             category_hint_score=category_hint_score,
         )
 
-    def has_shop_buy_message(self, screen) -> bool:
-        matched, _has_text = self.detect_shop_message_state(screen)
+    def has_shop_buy_message(self, screen, live_mode=None) -> bool:
+        matched, _has_text = self.detect_shop_message_state(screen, live_mode)
         return matched
 
-    def detect_shop_message_state(self, screen) -> tuple[bool, bool]:
-        texts = self._read_crop(screen, DetectOnShop.CROP_XYWH, "DetectOnShop")
+    def detect_shop_message_state(self, screen, live_mode=None) -> tuple[bool, bool]:
+        texts = self._read_crop(screen, DetectOnShop.get(live_mode), "DetectOnShop")
         if not texts:
             logger.info("店OCR: DetectOnShop textなし")
             return False, False
@@ -229,15 +229,16 @@ class ShopOcrReader:
         )
         return texts
 
-    def detect_item_category(self, screen) -> tuple[str | None, float]:
+    def detect_item_category(self, screen, live_mode=None) -> tuple[str | None, float]:
         import numpy as np
 
-        templates = self._load_category_templates()
+        icon_crop_xywh = PosItemIcons.get(live_mode)
+        templates = self._load_category_templates(icon_crop_xywh)
         if not templates:
             logger.info("店OCR: カテゴリアイコンテンプレートなし dir=%s", CATEGORY_ICON_DIR)
             return None, 0.0
 
-        crop_box, crop = crop_for_ocr(screen, PosItemIcons.CROP_XYWH)
+        crop_box, crop = crop_for_ocr(screen, icon_crop_xywh)
         self._save_debug_crop("PosItemIcons", crop)
         crop_array = np.asarray(crop.convert("RGB"), dtype=np.float32)
 
@@ -272,9 +273,11 @@ class ShopOcrReader:
         )
         return best_category, best_score
 
-    def _load_category_templates(self):
-        if self._category_templates is not None:
-            return self._category_templates
+    def _load_category_templates(self, icon_crop_xywh=None):
+        icon_crop_xywh = icon_crop_xywh or PosItemIcons.CROP_XYWH
+        template_size = (icon_crop_xywh[2], icon_crop_xywh[3])
+        if self._category_templates is not None and template_size in self._category_templates:
+            return self._category_templates.get(template_size, [])
 
         import numpy as np
         from PIL import Image
@@ -286,15 +289,14 @@ class ShopOcrReader:
                 try:
                     with Image.open(path) as image:
                         template = image.convert("RGB")
-                        if template.size != (PosItemIcons.CROP_XYWH[2], PosItemIcons.CROP_XYWH[3]):
-                            template = template.resize(
-                                (PosItemIcons.CROP_XYWH[2], PosItemIcons.CROP_XYWH[3]),
-                                Image.Resampling.LANCZOS,
-                            )
+                        if template.size != template_size:
+                            template = template.resize(template_size, Image.Resampling.LANCZOS)
                         templates.append((category, path.name, np.asarray(template, dtype=np.float32)))
                 except Exception:
                     logger.exception("店OCR: カテゴリアイコンテンプレート読込エラー path=%s", path)
-        self._category_templates = templates
+        if self._category_templates is None:
+            self._category_templates = {}
+        self._category_templates[template_size] = templates
         return templates
 
     def _save_debug_crop(self, label, crop):

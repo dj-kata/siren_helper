@@ -77,12 +77,12 @@ class StatusOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
-    def read(self, screen) -> StatusOcrResult | None:
+    def read(self, screen, live_mode=None) -> StatusOcrResult | None:
         if screen is None:
             logger.info("状態OCR: screen is None")
             return None
 
-        texts = self._read_crop(screen, PosStatusStrings.CROP_XYWH, "PosStatusStrings")
+        texts = self._read_crop(screen, PosStatusStrings.get(live_mode), "PosStatusStrings")
         raw_texts = tuple(text.text for text in texts)
         lines = group_ocr_texts_by_line(texts)
         is_entou = is_entou_status_lines(lines)

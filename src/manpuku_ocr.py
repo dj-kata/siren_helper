@@ -42,12 +42,12 @@ class ManpukuOcrReader:
     def _debug_mode(self) -> bool:
         return bool(getattr(self.config, "debug_mode", False))
 
-    def read(self, screen) -> ManpukuOcrResult | None:
+    def read(self, screen, live_mode=None) -> ManpukuOcrResult | None:
         if screen is None:
             logger.info("満腹度OCR: screen is None")
             return None
 
-        texts = self._read_crop(screen, PosManpukuNumbers.CROP_XYWH, "PosManpukuNumbers")
+        texts = self._read_crop(screen, PosManpukuNumbers.get(live_mode), "PosManpukuNumbers")
         raw_texts = [text.text for text in texts]
         current, maximum = extract_manpuku_numbers(raw_texts)
         if current is None or maximum is None:

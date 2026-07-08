@@ -19,9 +19,17 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from src.config import OCR_CAPTURE_RESOLUTION, OCR_CAPTURE_SIZE
-from src.define import DetectOnShop, PosManpukuNumbers, PosMyItemPrice, PosShopItemPrice
+from src.define import (
+    DetectOnShop,
+    PosManpukuNumbers,
+    PosMyItemPrice,
+    PosShopItemPrice,
+    live_exploration_mode_has_status,
+    live_exploration_mode_label,
+)
 from src.dungeon_ocr import DungeonOcrReader, normalize_ocr_text
 from src.item import ItemList
+from src.live_exploration_mode import detect_live_exploration_mode
 from src.shop_ocr import ShopOcrReader, extract_price, normalize_price_text
 from src.status_ocr import StatusOcrReader
 
@@ -55,6 +63,92 @@ SHOP_CATEGORY_HINTS = {
     "剣": "buki",
     "盾": "tate",
 }
+
+
+def parse_xywh(value):
+    try:
+        parts = [int(part.strip()) for part in value.split(",")]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("crop範囲は x,y,w,h の整数で指定してください") from exc
+    if len(parts) != 4:
+        raise argparse.ArgumentTypeError("crop範囲は x,y,w,h の4要素で指定してください")
+    x, y, width, height = parts
+    if width <= 0 or height <= 0:
+        raise argparse.ArgumentTypeError("crop範囲のw,hは1以上で指定してください")
+    return (x, y, width, height)
+
+
+def _box_left(box) -> float:
+    try:
+        return min(point[0] for point in box)
+    except Exception:
+        return 0.0
+
+
+def _box_center_y(box) -> float:
+    try:
+        ys = [point[1] for point in box]
+        return (min(ys) + max(ys)) / 2
+    except Exception:
+        return 0.0
+
+
+def inspect_text_crop(shop_reader, image, crop_xywh, label):
+    texts = sorted(
+        shop_reader._read_crop(image, crop_xywh, label),
+        key=lambda data: (_box_center_y(data.box), _box_left(data.box)),
+    )
+    raw_texts = [text.text for text in texts]
+    joined_text = "".join(raw_texts)
+    return {
+        "label": label,
+        "crop_xywh": crop_xywh,
+        "raw_texts": raw_texts,
+        "joined_text": joined_text,
+        "normalized_text": normalize_ocr_text(joined_text),
+        "scores": [round(text.score, 3) for text in texts],
+    }
+
+
+def print_text_crop_result(result):
+    print(f"画像: {result['path']}")
+    print(f"処理解像度: {result['processed_size'][0]}x{result['processed_size'][1]} (入力: {result['original_size'][0]}x{result['original_size'][1]})")
+    for crop in result["text_crops"]:
+        print(f"文字列crop: {crop['label']} xywh={tuple(crop['crop_xywh'])}")
+        print(f"  raw: {crop['raw_texts']}")
+        print(f"  joined: {crop['joined_text']}")
+        print(f"  normalized: {crop['normalized_text']}")
+        print(f"  scores: {crop['scores']}")
+
+
+def run_text_crop_mode(args, config):
+    shop_reader = ShopOcrReader(config)
+    results = []
+    for image_path in args.images:
+        path = Path(image_path)
+        with Image.open(path) as source:
+            original = source.convert("RGB")
+        image = resize_for_ocr(original)
+        text_crops = [
+            inspect_text_crop(shop_reader, image, crop_xywh, f"TextCrop{index + 1}")
+            for index, crop_xywh in enumerate(args.text_crop)
+        ]
+        result = {
+            "path": str(path),
+            "original_size": original.size,
+            "processed_size": image.size,
+            "resolution": OCR_CAPTURE_RESOLUTION,
+            "use_gpu": False,
+            "text_crops": text_crops,
+        }
+        results.append(result)
+
+        if not args.json:
+            print_text_crop_result(result)
+            print()
+
+    if args.json:
+        print(json.dumps(results, ensure_ascii=False, indent=2))
 
 
 def load_dungeons():
@@ -212,10 +306,10 @@ def format_candidate(candidate):
     }
 
 
-def inspect_shop_crops(shop_reader, image):
-    detect_texts = shop_reader._read_crop(image, DetectOnShop.CROP_XYWH, "DetectOnShop")
-    my_texts = shop_reader._read_crop(image, PosMyItemPrice.CROP_XYWH, "PosMyItemPrice")
-    shop_texts = shop_reader._read_crop(image, PosShopItemPrice.CROP_XYWH, "PosShopItemPrice")
+def inspect_shop_crops(shop_reader, image, live_mode=None):
+    detect_texts = shop_reader._read_crop(image, DetectOnShop.get(live_mode), "DetectOnShop")
+    my_texts = shop_reader._read_crop(image, PosMyItemPrice.get(live_mode), "PosMyItemPrice")
+    shop_texts = shop_reader._read_crop(image, PosShopItemPrice.get(live_mode), "PosShopItemPrice")
     sell_price = extract_price(my_texts[-1].text) if len(my_texts) >= 2 else None
     buy_price = extract_price(shop_texts[-1].text) if len(shop_texts) >= 2 else None
     return {
@@ -230,8 +324,18 @@ def inspect_shop_crops(shop_reader, image):
     }
 
 
-def inspect_manpuku_crops(shop_reader, image):
-    texts = shop_reader._read_crop(image, PosManpukuNumbers.CROP_XYWH, "PosManpukuNumbers")
+def inspect_manpuku_crops(shop_reader, image, live_mode=None):
+    if not live_exploration_mode_has_status(live_mode):
+        return {
+            "detected": False,
+            "label": None,
+            "current": None,
+            "maximum": None,
+            "raw_texts": [],
+            "disabled": True,
+        }
+
+    texts = shop_reader._read_crop(image, PosManpukuNumbers.get(live_mode), "PosManpukuNumbers")
     raw_texts = [text.text for text in texts]
     joined_text = normalize_price_text("".join(raw_texts))
     numbers = [
@@ -247,21 +351,32 @@ def inspect_manpuku_crops(shop_reader, image):
         "current": current,
         "maximum": maximum,
         "raw_texts": raw_texts,
+        "disabled": False,
     }
 
 
-def inspect_status_crops(status_reader, image):
-    result = status_reader.read(image)
+def inspect_status_crops(status_reader, image, live_mode=None):
+    if not live_exploration_mode_has_status(live_mode):
+        return {
+            "is_entou": False,
+            "lines": [],
+            "raw_texts": [],
+            "disabled": True,
+        }
+
+    result = status_reader.read(image, live_mode)
     if not result:
         return {
             "is_entou": False,
             "lines": [],
             "raw_texts": [],
+            "disabled": False,
         }
     return {
         "is_entou": result.is_entou,
         "lines": list(result.lines),
         "raw_texts": list(result.raw_texts),
+        "disabled": False,
     }
 
 
@@ -301,6 +416,7 @@ def resolve_candidates(itemlist, shop_result, dungeon):
 def print_result(result):
     print(f"画像: {result['path']}")
     print(f"処理解像度: {result['processed_size'][0]}x{result['processed_size'][1]} (入力: {result['original_size'][0]}x{result['original_size'][1]})")
+    print(f"ライブ探索表示: {result['live_mode']} ({result['live_mode_label']})")
 
     dungeon = result["dungeon"]
     print("ダンジョン:")
@@ -313,14 +429,19 @@ def print_result(result):
         print("  判定なし")
 
     manpuku = result["manpuku"]
+    if manpuku.get("disabled"):
+        print("満腹度: ライブ探索モードなしのため無効")
     if manpuku["detected"]:
         print(f"満腹度: {manpuku['current']}/{manpuku['maximum']} raw={manpuku['raw_texts']}")
 
     status = result["status"]
     print("状態:")
-    print(f"  遠投状態: {status['is_entou']}")
-    print(f"  lines: {status['lines']}")
-    print(f"  raw: {status['raw_texts']}")
+    if status.get("disabled"):
+        print("  ライブ探索モードなしのため無効")
+    else:
+        print(f"  遠投状態: {status['is_entou']}")
+        print(f"  lines: {status['lines']}")
+        print(f"  raw: {status['raw_texts']}")
 
     shop = result["shop_inspection"]
     print("ショップ/アイテム画面:")
@@ -358,9 +479,20 @@ def main():
     parser.add_argument("images", nargs="+", help="検証する画像ファイル")
     parser.add_argument("--debug-crops", action="store_true", help="OCR crop画像をlogへ保存する")
     parser.add_argument("--json", action="store_true", help="結果をJSONで出力する")
+    parser.add_argument(
+        "--text-crop",
+        action="append",
+        type=parse_xywh,
+        metavar="X,Y,W,H",
+        help="指定範囲だけOCRして文字列を表示する。複数指定可。座標はFullHD基準のx,y,w,h",
+    )
     args = parser.parse_args()
 
     config = SimpleNamespace(debug_mode=args.debug_crops)
+    if args.text_crop:
+        run_text_crop_mode(args, config)
+        return
+
     dungeon_reader = DungeonOcrReader(config)
     shop_reader = ShopOcrReader(config)
     status_reader = StatusOcrReader(config)
@@ -373,18 +505,19 @@ def main():
         with Image.open(path) as source:
             original = source.convert("RGB")
         image = resize_for_ocr(original)
+        live_mode = detect_live_exploration_mode(image, path)
 
-        dungeon_result = dungeon_reader.read(image, dungeons)
+        dungeon_result = dungeon_reader.read(image, dungeons, live_mode)
         dungeon = None
         matched_dungeon = None
         if dungeon_result:
             dungeon = asdict(dungeon_result)
             matched_dungeon = next((data for data in dungeons if data["key"] == dungeon_result.dungeon_key), None)
 
-        shop_inspection = inspect_shop_crops(shop_reader, image)
-        manpuku = inspect_manpuku_crops(shop_reader, image)
-        status = inspect_status_crops(status_reader, image)
-        shop_result = shop_reader.read(image)
+        shop_inspection = inspect_shop_crops(shop_reader, image, live_mode)
+        manpuku = inspect_manpuku_crops(shop_reader, image, live_mode)
+        status = inspect_status_crops(status_reader, image, live_mode)
+        shop_result = shop_reader.read(image, live_mode)
         candidate_info = resolve_candidates(itemlist, shop_result, matched_dungeon)
 
         result = {
@@ -393,6 +526,8 @@ def main():
             "processed_size": image.size,
             "resolution": OCR_CAPTURE_RESOLUTION,
             "use_gpu": False,
+            "live_mode": live_mode,
+            "live_mode_label": live_exploration_mode_label(live_mode),
             "dungeon": dungeon,
             "manpuku": manpuku,
             "status": status,
