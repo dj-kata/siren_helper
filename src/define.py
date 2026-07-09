@@ -96,14 +96,18 @@ class DetectOnShop:
 
 
 class PosMyItemPrice:
-    """手持ちアイテムの買取価格部分の切り取り"""
+    """手持ちアイテムの買取価格部分の切り取り。
+    アイコンは入れず、アイテム名～価格末尾までを切り出す。"""
 
-    CROP_XYWH = (808, 530, 620, 50)
+    CROP_XYWH_TYPE0 = (1010, 670, 780, 55)
+    CROP_XYWH_TYPE1 = (757, 500, 580, 45)
+    CROP_XYWH_TYPE2 = (808, 530, 620, 50)
+    CROP_XYWH_TYPE3 = (910, 600, 700, 55)
     CROP_XYWH_BY_LIVE_MODE = {
-        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH,
-        LIVE_EXPLORATION_MODE_1: CROP_XYWH,
-        LIVE_EXPLORATION_MODE_2: CROP_XYWH,
-        LIVE_EXPLORATION_MODE_3: CROP_XYWH,
+        LIVE_EXPLORATION_MODE_NONE: CROP_XYWH_TYPE0,
+        LIVE_EXPLORATION_MODE_1: CROP_XYWH_TYPE1,
+        LIVE_EXPLORATION_MODE_2: CROP_XYWH_TYPE2,
+        LIVE_EXPLORATION_MODE_3: CROP_XYWH_TYPE3,
     }
 
     @classmethod
