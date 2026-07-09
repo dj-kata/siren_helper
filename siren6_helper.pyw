@@ -1106,9 +1106,9 @@ class MainWindow(MainWindowUI):
                 result["hide_monster_floor"] = hide_monster_floor
             if self.config.shop_ocr_enabled:
                 result["shop_result"] = self.read_shop_from_screen(screen, live_mode)
+            if self.config.dosukoi_alert_enabled:
+                result["manpuku_result"] = self.read_manpuku_from_screen(screen, live_mode)
             if live_exploration_mode_has_status(live_mode):
-                if self.config.dosukoi_alert_enabled:
-                    result["manpuku_result"] = self.read_manpuku_from_screen(screen, live_mode)
                 if self.config.entou_alert_enabled:
                     result["status_result"] = self.read_status_from_screen(screen, live_mode)
         except Exception:
@@ -1300,11 +1300,8 @@ class MainWindow(MainWindowUI):
         if self.manpuku_warning_audio_output:
             self.manpuku_warning_audio_output.setVolume(self.manpuku_warning_volume())
 
-    def handle_manpuku_ocr_result(self, result, status_result=None, alerts_available=True):
-        if (
-            not alerts_available
-            or (not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled)
-        ):
+    def handle_manpuku_ocr_result(self, result, status_result=None, status_available=True):
+        if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
             self.dosukoi_alert_target_active = False
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
@@ -1312,7 +1309,7 @@ class MainWindow(MainWindowUI):
             self.stop_manpuku_warning()
             return
 
-        if not self.config.entou_alert_enabled:
+        if not status_available or not self.config.entou_alert_enabled:
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
             status_result = None

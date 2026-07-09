@@ -325,16 +325,6 @@ def inspect_shop_crops(shop_reader, image, live_mode=None):
 
 
 def inspect_manpuku_crops(shop_reader, image, live_mode=None):
-    if not live_exploration_mode_has_status(live_mode):
-        return {
-            "detected": False,
-            "label": None,
-            "current": None,
-            "maximum": None,
-            "raw_texts": [],
-            "disabled": True,
-        }
-
     texts = shop_reader._read_crop(image, PosManpukuNumbers.get(live_mode), "PosManpukuNumbers")
     raw_texts = [text.text for text in texts]
     joined_text = normalize_price_text("".join(raw_texts))
@@ -429,8 +419,6 @@ def print_result(result):
         print("  判定なし")
 
     manpuku = result["manpuku"]
-    if manpuku.get("disabled"):
-        print("満腹度: ライブ探索モードなしのため無効")
     if manpuku["detected"]:
         print(f"満腹度: {manpuku['current']}/{manpuku['maximum']} raw={manpuku['raw_texts']}")
 
