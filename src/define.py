@@ -179,7 +179,7 @@ class PosManpukuNumbers:
     """満腹度読み取り用"""
 
     CROP_XYWH_TYPE0 = (790, 75, 290, 60)
-    CROP_XYWH_TYPE1 = (590, 60, 215, 40)
+    CROP_XYWH_TYPE1 = (585, 56, 220, 53)
     CROP_XYWH_TYPE2 = (630, 65, 233, 40)
     CROP_XYWH_TYPE3 = (700, 70, 265, 50)
     CROP_XYWH_BY_LIVE_MODE = {
