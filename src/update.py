@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import re
 import requests
 import shutil
 import subprocess
@@ -18,6 +19,8 @@ from src.logger import get_logger
 logger = get_logger(__name__)
 
 class GitHubUpdater:
+    RELEASE_TAG_PREFIX = "siren6"
+
     def __init__(self, github_author='', github_repo='', zipfile_basename='', current_version='', main_exe_name=None, updator_exe_name=None):
         """
         GitHub自動アップデータの初期化
@@ -52,6 +55,29 @@ class GitHubUpdater:
             base_path = os.path.abspath(".")
         return os.path.join(base_path, relative_path)
 
+    def _extract_version_for_compare(self, tag, require_prefix=False):
+        tag = (tag or "").strip()
+        if require_prefix:
+            match = re.fullmatch(rf"{re.escape(self.RELEASE_TAG_PREFIX)}[_\-.](.+)", tag)
+            if not match:
+                return None
+            tag = match.group(1)
+        else:
+            match = re.fullmatch(rf"{re.escape(self.RELEASE_TAG_PREFIX)}[_\-.](.+)", tag)
+            if match:
+                tag = match.group(1)
+
+        if tag.startswith("v."):
+            tag = tag[2:]
+        elif tag.startswith("v"):
+            tag = tag[1:]
+
+        try:
+            return version.parse(tag)
+        except version.InvalidVersion:
+            logger.debug(f"invalid version tag: {tag}")
+            return None
+
     def get_latest_version(self):
         # self.ico=self.ico_path('icon.ico')
         ret = None
@@ -61,8 +87,12 @@ class GitHubUpdater:
         for tag in soup.find_all('a'):
             if 'releases/tag/' in tag['href']:
                 logger.debug(f"tag = {tag}")
-                ret = tag['href'].split('/')[-1]
-                break # 1番上が最新なので即break
+                tag_name = tag['href'].split('/')[-1]
+                if self._extract_version_for_compare(tag_name, require_prefix=True) is None:
+                    logger.debug(f"skip non-{self.RELEASE_TAG_PREFIX} tag: {tag_name}")
+                    continue
+                ret = tag_name
+                break # 対象タグの中で1番上が最新なので即break
         return ret
 
     def check_for_updates(self):
@@ -75,11 +105,19 @@ class GitHubUpdater:
         logger.debug(f"github_repo:{self.github_author}/{self.github_repo}")
         try:
             latest_version = self.get_latest_version()
+            if latest_version is None:
+                logger.info(f"{self.RELEASE_TAG_PREFIX} release tag not found")
+                return False, None, None
             download_url = f"https://github.com/{self.github_author}/{self.github_repo}/releases/download/{latest_version}/{self.zipfile_basename}.zip"
             logger.debug(f"latest_version:{latest_version}, current:{self.current_version}")
             
             # バージョン比較
-            if version.parse(latest_version.split('v.')[-1]) > version.parse(self.current_version.split('v.')[-1]):
+            latest_for_compare = self._extract_version_for_compare(latest_version, require_prefix=True)
+            current_for_compare = self._extract_version_for_compare(self.current_version)
+            if latest_for_compare is None or current_for_compare is None:
+                logger.info(f"version parse failed: latest={latest_version}, current={self.current_version}")
+                return False, latest_version, None
+            if latest_for_compare > current_for_compare:
                 return True, latest_version, download_url
             else:
                 return False, latest_version, None
