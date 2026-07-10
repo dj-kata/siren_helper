@@ -276,6 +276,7 @@ class MainWindow(MainWindowUI):
         self.obs_dosukoi_alert_trigger_active = False
         self.obs_entou_alert_trigger_active = False
         self.last_shop_result_signature = None
+        self.last_shop_status_message = ""
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
         self.shop_price_visible = False
@@ -1535,6 +1536,10 @@ class MainWindow(MainWindowUI):
         if signature == self.last_shop_result_signature:
             if self.shop_price_visible:
                 self.last_shop_price_visible_time = time.monotonic()
+                if self.last_shop_status_message:
+                    if getattr(self, "shop_status_label", None):
+                        self.shop_status_label.setText(self.last_shop_status_message)
+                    self.statusBar().showMessage(self.last_shop_status_message, 8000)
             return
         self.last_shop_result_signature = signature
         logger.info(
@@ -1576,12 +1581,12 @@ class MainWindow(MainWindowUI):
                     names = [self.format_shop_candidate(candidate) for candidate in candidates]
                     preview = "、".join(names[:8])
                     suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
-                    self.statusBar().showMessage(
+                    self.show_shop_status_message(
                         f"店OCR識別済: {price_label}{result.price} -> {preview}{suffix}",
                         8000,
                     )
                 else:
-                    self.statusBar().showMessage(
+                    self.show_shop_status_message(
                         f"店OCR識別済: {item.name} ({price_label}{result.price})",
                         4000,
                     )
@@ -1601,7 +1606,7 @@ class MainWindow(MainWindowUI):
                 self.touch_item_identification_state()
             self.update_item_tables()
             self.select_items_in_table(category, [item])
-            self.statusBar().showMessage(f"OCR識別済: {item.name}", 4000)
+            self.show_shop_status_message(f"OCR識別済: {item.name}", 4000)
             return
 
         if result.price is None:
@@ -1639,7 +1644,7 @@ class MainWindow(MainWindowUI):
                 getattr(result, "category_hint_score", 0.0),
             )
             self.hide_shop_price_state()
-            self.statusBar().showMessage(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
+            self.show_shop_status_message(f"店OCR: 種別を判定できません ({result.item_text})", 4000)
             return
         if icon_category and not text_category:
             logger.info(
@@ -1668,15 +1673,21 @@ class MainWindow(MainWindowUI):
             names = [self.format_shop_candidate(candidate) for candidate in candidates]
             preview = "、".join(names[:8])
             suffix = f" 他{len(names) - 8}件" if len(names) > 8 else ""
-            self.statusBar().showMessage(
+            self.show_shop_status_message(
                 f"店OCR候補: {category_label} {price_label}{result.price} -> {preview}{suffix}",
                 8000,
             )
         else:
-            self.statusBar().showMessage(
+            self.show_shop_status_message(
                 f"店OCR候補なし: {category_label} {price_label}{result.price}",
                 5000,
             )
+
+    def show_shop_status_message(self, message, timeout=8000):
+        self.last_shop_status_message = message
+        if getattr(self, "shop_status_label", None):
+            self.shop_status_label.setText(message)
+        self.statusBar().showMessage(message, timeout)
 
     def find_item_by_name(self, text):
         target = self.normalize_item_match_text(text)
@@ -2033,6 +2044,9 @@ class MainWindow(MainWindowUI):
         self.hide_shop_price_state()
 
     def hide_shop_price_state(self):
+        self.last_shop_status_message = ""
+        if getattr(self, "shop_status_label", None):
+            self.shop_status_label.clear()
         if not self.websocket_server or not self.shop_price_visible:
             return
         self.shop_price_visible = False
@@ -2048,7 +2062,8 @@ class MainWindow(MainWindowUI):
         if not table:
             return
 
-        self.top_tabs.setCurrentIndex(0)
+        if self.top_tabs:
+            self.top_tabs.setCurrentIndex(0)
         self.dungeon_data_tabs.setCurrentIndex(0)
         tab_index = ITEM_CATEGORIES.index(category)
         self.identify_tabs.setCurrentIndex(tab_index)
@@ -2061,13 +2076,14 @@ class MainWindow(MainWindowUI):
                 row = target.index(item)
             except ValueError:
                 continue
-            for column in range(table.columnCount()):
-                cell = table.item(row, column)
-                if cell:
-                    cell.setSelected(True)
+            table.selectRow(row)
             selected_rows.append(row)
         if selected_rows:
-            table.scrollToItem(table.item(selected_rows[0], 0))
+            first_row = selected_rows[0]
+            table.setCurrentCell(first_row, 0)
+            for row in selected_rows:
+                table.selectRow(row)
+            table.scrollToItem(table.item(first_row, 0))
 
     def broadcast_capture_state(self):
         if not self.websocket_server:

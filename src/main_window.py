@@ -50,6 +50,7 @@ class MainWindowUI(QMainWindow):
         self.ui = load_ui_text(self.config)
 
         self.obs_status_label = None
+        self.shop_status_label = None
         self.top_tabs = None
         self.dungeon_data_tabs = None
         self.identify_tabs = None
@@ -84,6 +85,11 @@ class MainWindowUI(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
 
         main_layout.addWidget(self.create_identification_tab())
+
+        self.shop_status_label = QLabel("")
+        self.shop_status_label.setMinimumWidth(360)
+        self.shop_status_label.setStyleSheet("color: #1f6feb; font-weight: bold;")
+        self.statusBar().addPermanentWidget(self.shop_status_label, 1)
 
         self.obs_status_label = QLabel(self.ui.obs.not_connected)
         self.update_obs_status_label(False)
