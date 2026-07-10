@@ -17,6 +17,12 @@ TYPE1_STATUS_TITLE_CROP_XYWH = (970, 970, 150, 40)
 TYPE2_STATUS_TITLE_CROP_XYWH = (1070, 970, 150, 45)
 TYPE3_STATUS_TITLE_CROP_XYWH = (1370, 977, 150, 50)
 STATUS_TITLE_TEXT = "現在の状態"
+FILENAME_MODE_HINTS = (
+    ("type1", LIVE_EXPLORATION_MODE_1),
+    ("type2", LIVE_EXPLORATION_MODE_2),
+    ("type3", LIVE_EXPLORATION_MODE_3),
+    ("type0", LIVE_EXPLORATION_MODE_NONE),
+)
 _ocr = None
 
 
@@ -88,6 +94,12 @@ def detect_live_exploration_mode(screen, source_path=None):
                 return LIVE_EXPLORATION_MODE_3
         except Exception:
             pass
+
+    if source_path is not None:
+        source_name = Path(source_path).name.lower()
+        for hint, mode in FILENAME_MODE_HINTS:
+            if hint in source_name:
+                return mode
 
     return DEFAULT_LIVE_EXPLORATION_MODE
 

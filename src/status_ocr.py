@@ -10,6 +10,7 @@ from src.shop_ocr import ShopOcrText
 logger = get_logger(__name__)
 DEBUG_CROP_DIR = Path("log") / "status_ocr_crops"
 STATUS_TITLE_TEXT = "現在の状態"
+STATUS_TITLE_TEXT_ALIASES = (STATUS_TITLE_TEXT, "現在の状感")
 ENTOU_TEXT_ALIASES = ("遠投", "速投")
 LINE_GROUP_Y_THRESHOLD = 16.0
 
@@ -55,18 +56,26 @@ def group_ocr_texts_by_line(texts: list[ShopOcrText]) -> tuple[str, ...]:
 
 
 def is_entou_status_lines(lines: tuple[str, ...]) -> bool:
-    if len(lines) < 2:
+    if not lines:
         return False
 
-    first_line = normalize_ocr_text(lines[0])
-    second_line = normalize_ocr_text(lines[1])
-    return (
-        normalize_ocr_text(STATUS_TITLE_TEXT) in first_line
-        and any(
-            normalize_ocr_text(alias) in second_line
-            for alias in ENTOU_TEXT_ALIASES
-        )
-    )
+    titles = tuple(normalize_ocr_text(title) for title in STATUS_TITLE_TEXT_ALIASES)
+    aliases = tuple(normalize_ocr_text(alias) for alias in ENTOU_TEXT_ALIASES)
+    normalized_lines = tuple(normalize_ocr_text(line) for line in lines)
+
+    title_indexes = [
+        index
+        for index, line in enumerate(normalized_lines)
+        if any(title in line for title in titles)
+    ]
+    if title_indexes:
+        status_lines = normalized_lines[title_indexes[0]:]
+    else:
+        # ライブ探索表示判定済みの状態欄cropなので、タイトルOCRだけ落ちても
+        # 状態文字列が読めていれば検出できるようにする。
+        status_lines = normalized_lines
+
+    return any(alias in line for line in status_lines for alias in aliases)
 
 
 class StatusOcrReader:
