@@ -17,6 +17,7 @@ TYPE1_STATUS_TITLE_CROP_XYWH = (970, 970, 150, 40)
 TYPE2_STATUS_TITLE_CROP_XYWH = (1070, 970, 150, 45)
 TYPE3_STATUS_TITLE_CROP_XYWH = (1370, 977, 150, 50)
 STATUS_TITLE_TEXT = "現在の状態"
+STATUS_TITLE_TEXT_ALIASES = (STATUS_TITLE_TEXT, "現在の状感")
 FILENAME_MODE_HINTS = (
     ("type1", LIVE_EXPLORATION_MODE_1),
     ("type2", LIVE_EXPLORATION_MODE_2),
@@ -58,22 +59,26 @@ def read_crop_text(screen, crop_xywh) -> str:
 
 def is_type0_status_title(screen) -> bool:
     text = read_crop_text(screen, TYPE0_STATUS_TITLE_CROP_XYWH)
-    return normalize_ocr_text(STATUS_TITLE_TEXT) in normalize_ocr_text(text)
+    normalized = normalize_ocr_text(text)
+    return any(normalize_ocr_text(alias) in normalized for alias in STATUS_TITLE_TEXT_ALIASES)
 
 
 def is_type1_status_title(screen) -> bool:
     text = read_crop_text(screen, TYPE1_STATUS_TITLE_CROP_XYWH)
-    return normalize_ocr_text(STATUS_TITLE_TEXT) in normalize_ocr_text(text)
+    normalized = normalize_ocr_text(text)
+    return any(normalize_ocr_text(alias) in normalized for alias in STATUS_TITLE_TEXT_ALIASES)
 
 
 def is_type2_status_title(screen) -> bool:
     text = read_crop_text(screen, TYPE2_STATUS_TITLE_CROP_XYWH)
-    return normalize_ocr_text(STATUS_TITLE_TEXT) in normalize_ocr_text(text)
+    normalized = normalize_ocr_text(text)
+    return any(normalize_ocr_text(alias) in normalized for alias in STATUS_TITLE_TEXT_ALIASES)
 
 
 def is_type3_status_title(screen) -> bool:
     text = read_crop_text(screen, TYPE3_STATUS_TITLE_CROP_XYWH)
-    return normalize_ocr_text(STATUS_TITLE_TEXT) in normalize_ocr_text(text)
+    normalized = normalize_ocr_text(text)
+    return any(normalize_ocr_text(alias) in normalized for alias in STATUS_TITLE_TEXT_ALIASES)
 
 
 def detect_live_exploration_mode(screen, source_path=None):

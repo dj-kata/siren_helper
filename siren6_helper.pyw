@@ -1111,6 +1111,12 @@ class MainWindow(MainWindowUI):
             if live_exploration_mode_has_status(live_mode):
                 if self.config.entou_alert_enabled:
                     result["status_result"] = self.read_status_from_screen(screen, live_mode)
+            elif self.config.entou_alert_enabled:
+                logger.info(
+                    "状態OCRスキップ: ライブ探索表示に状態欄なし live_mode=%s (%s)",
+                    live_mode,
+                    live_exploration_mode_label(live_mode),
+                )
         except Exception:
             result["capture_failed"] = True
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
@@ -1310,6 +1316,8 @@ class MainWindow(MainWindowUI):
             return
 
         if not status_available or not self.config.entou_alert_enabled:
+            if self.config.entou_alert_enabled and not status_available:
+                logger.info("遠投状態アラート判定: 状態欄がないため判定をリセットします")
             self.entou_warning_latched = False
             self.entou_status_miss_count = 0
             status_result = None
@@ -1409,9 +1417,12 @@ class MainWindow(MainWindowUI):
             and 120 < result.current <= self.config.dosukoi_alert_threshold
         )
         should_stop = (
-            not self.dosukoi_alert_target_active
-            or result.current <= 120
-            or result.current > self.config.dosukoi_alert_threshold
+            not entou_status_message
+            and (
+                not self.dosukoi_alert_target_active
+                or result.current <= 120
+                or result.current > self.config.dosukoi_alert_threshold
+            )
         )
         action = "start" if should_start else "stop" if should_stop else "keep"
         state = (

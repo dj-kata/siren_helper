@@ -1,2 +1,3 @@
 - 常に日本語で回答すること
-- python実行については、/mnt/c/Users/katao/.local/bin/uv.exeのuv経由で実行すること
+- python実行については、必ずWindows版uv（`/mnt/c/Users/katao/.local/bin/uv.exe`）経由で実行すること
+- WSL/Ubuntu側の `uv` コマンドは使わないこと
