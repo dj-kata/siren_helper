@@ -1537,8 +1537,6 @@ class MainWindow(MainWindowUI):
             if self.shop_price_visible:
                 self.last_shop_price_visible_time = time.monotonic()
                 if self.last_shop_status_message:
-                    if getattr(self, "shop_status_label", None):
-                        self.shop_status_label.setText(self.last_shop_status_message)
                     self.statusBar().showMessage(self.last_shop_status_message, 8000)
             return
         self.last_shop_result_signature = signature
@@ -1685,8 +1683,6 @@ class MainWindow(MainWindowUI):
 
     def show_shop_status_message(self, message, timeout=8000):
         self.last_shop_status_message = message
-        if getattr(self, "shop_status_label", None):
-            self.shop_status_label.setText(message)
         self.statusBar().showMessage(message, timeout)
 
     def find_item_by_name(self, text):
@@ -2045,8 +2041,6 @@ class MainWindow(MainWindowUI):
 
     def hide_shop_price_state(self):
         self.last_shop_status_message = ""
-        if getattr(self, "shop_status_label", None):
-            self.shop_status_label.clear()
         if not self.websocket_server or not self.shop_price_visible:
             return
         self.shop_price_visible = False
