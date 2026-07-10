@@ -258,6 +258,9 @@ class MainWindow(MainWindowUI):
         self.dungeon_ocr_reader = DungeonOcrReader(self.config)
         self.last_dungeon_ocr_time = 0.0
         self.dungeon_ocr_interval = 3.0
+        self.last_live_mode = None
+        self.last_live_mode_detect_time = 0.0
+        self.live_mode_detect_interval = self.dungeon_ocr_interval
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
         self.status_ocr_reader = StatusOcrReader(self.config)
@@ -1097,9 +1100,8 @@ class MainWindow(MainWindowUI):
                 result["capture_failed"] = True
                 return
             result["screen"] = screen
-            live_mode = detect_live_exploration_mode(screen)
+            live_mode = self.read_live_mode_from_screen(screen)
             result["live_mode"] = live_mode
-            logger.info("ライブ探索表示判定: %s (%s)", live_mode, live_exploration_mode_label(live_mode))
             if self.config.dungeon_ocr_enabled:
                 dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen, live_mode)
                 result["dungeon_result"] = dungeon_result
@@ -1122,6 +1124,22 @@ class MainWindow(MainWindowUI):
             logger.error(f"画面取得/OCRワーカーエラー: {traceback.format_exc()}")
         finally:
             self.capture_processed.emit(result)
+
+    def read_live_mode_from_screen(self, screen):
+        now = time.monotonic()
+        should_detect = (
+            self.last_live_mode is None
+            or now - self.last_live_mode_detect_time >= self.live_mode_detect_interval
+        )
+        if should_detect:
+            self.last_live_mode = detect_live_exploration_mode(screen)
+            self.last_live_mode_detect_time = now
+            logger.info(
+                "ライブ探索表示判定: %s (%s)",
+                self.last_live_mode,
+                live_exploration_mode_label(self.last_live_mode),
+            )
+        return self.last_live_mode
 
     def capture_game_screen(self):
         if self.config.capture_mode == CAPTURE_MODE_OBS:
