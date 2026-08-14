@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QApplication,
     QButtonGroup,
+    QCheckBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -55,6 +56,9 @@ class MainWindowUI(QMainWindow):
         self.identify_tabs = None
         self.dungeon_combo = None
         self.monster_floor_combo = None
+        self.monster_table_wrap_checkbox = None
+        self.monster_table_icon_only_checkbox = None
+        self.monster_table_icon_size_combo = None
         self.monster_table = None
         self.shop_candidate_table = None
         self.item_tables = {}
@@ -118,6 +122,17 @@ class MainWindowUI(QMainWindow):
         dungeon_layout.addWidget(self.monster_floor_combo)
         self.reset_button = QPushButton("リセット")
         dungeon_layout.addWidget(self.reset_button)
+        self.monster_table_wrap_checkbox = QCheckBox("多段表示")
+        dungeon_layout.addWidget(self.monster_table_wrap_checkbox)
+        self.monster_table_icon_only_checkbox = QCheckBox("アイコンのみ")
+        dungeon_layout.addWidget(self.monster_table_icon_only_checkbox)
+        dungeon_layout.addWidget(QLabel("アイコンサイズ:"))
+        self.monster_table_icon_size_combo = QComboBox()
+        self.monster_table_icon_size_combo.addItem("小", "small")
+        self.monster_table_icon_size_combo.addItem("中", "medium")
+        self.monster_table_icon_size_combo.addItem("大", "large")
+        self.monster_table_icon_size_combo.setMaximumWidth(70)
+        dungeon_layout.addWidget(self.monster_table_icon_size_combo)
         dungeon_layout.addStretch()
         layout.addLayout(dungeon_layout)
 

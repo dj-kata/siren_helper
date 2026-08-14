@@ -50,7 +50,7 @@ def startup_trace(message):
 
 startup_trace("start")
 
-from PySide6.QtCore import QTimer, Qt, Signal, QUrl
+from PySide6.QtCore import QEvent, QSize, QTimer, Qt, Signal, QUrl
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
@@ -171,6 +171,14 @@ MONSTER_FLOOR_DUNGEON_KEYS = {"toguro_shinzui", "cho_shinzui"}
 INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
 MONSTER_ICON_FILENAME_MAP_PATH = Path("data/monster_icon_filenames.json")
+MONSTER_TABLE_FLOOR_COLUMN_WIDTH = 60
+MONSTER_TABLE_TEXT_COLUMN_WIDTH = 140
+MONSTER_TABLE_ICON_COLUMN_WIDTH = 48
+MONSTER_TABLE_ICON_SIZES = {
+    "small": 24,
+    "medium": 36,
+    "large": 48,
+}
 MONSTER_ICON_NAME_ALIASES = {
     "洞窟マムル": "どうくつマムル",
 }
@@ -194,6 +202,9 @@ class UserSettings:
             "memo_const": {},
             "selected_dungeon": "",
             "selected_monster_floor": 1,
+            "monster_table_wrap": False,
+            "monster_table_icon_only": False,
+            "monster_table_icon_size": "small",
         }
         for key in ITEM_CATEGORIES:
             ret[key] = [False] * len(getattr(tmp, key))
@@ -240,6 +251,7 @@ class MainWindow(MainWindowUI):
         self.itemlist = ItemList()
         self.itemlist.load(self.siren_settings.params)
         self.monster_icon_filename_map = self.load_monster_icon_filename_map()
+        self.monster_table_updating = False
         self.dungeons = self.load_dungeon_filters()
         self.dungeon_ocr_targets = self.load_dungeon_filters(include_disabled=True)
         self.selected_dungeon_key = self.default_dungeon_key()
@@ -481,6 +493,19 @@ class MainWindow(MainWindowUI):
         self.manual_shop_price_kind_group.buttonClicked.connect(lambda _button: self.update_manual_shop_price_search())
         self.manual_shop_add_button.clicked.connect(self.add_manual_shop_candidate)
         self.reset_button.clicked.connect(self.reset_identification)
+        self.monster_table_wrap_checkbox.setChecked(
+            bool(self.siren_settings.params.get("monster_table_wrap", False))
+        )
+        self.monster_table_icon_only_checkbox.setChecked(
+            bool(self.siren_settings.params.get("monster_table_icon_only", False))
+        )
+        icon_size_key = self.siren_settings.params.get("monster_table_icon_size", "small")
+        icon_size_index = self.monster_table_icon_size_combo.findData(icon_size_key)
+        self.monster_table_icon_size_combo.setCurrentIndex(max(0, icon_size_index))
+        self.monster_table_wrap_checkbox.toggled.connect(self.on_monster_table_option_changed)
+        self.monster_table_icon_only_checkbox.toggled.connect(self.on_monster_table_option_changed)
+        self.monster_table_icon_size_combo.currentIndexChanged.connect(self.on_monster_table_option_changed)
+        self.monster_table.viewport().installEventFilter(self)
         self.update_item_tables()
 
     def load_dungeon_filters(self, include_disabled=False):
@@ -578,6 +603,20 @@ class MainWindow(MainWindowUI):
         self.update_monster_table()
         self.save_current_selection()
 
+    def on_monster_table_option_changed(self, *_args):
+        self.update_monster_table()
+        self.save_current_selection()
+
+    def eventFilter(self, watched, event):
+        if (
+            watched is self.monster_table.viewport()
+            and event.type() == QEvent.Resize
+            and self.monster_table_wrap_checkbox.isChecked()
+            and not self.monster_table_updating
+        ):
+            QTimer.singleShot(0, self.update_monster_table)
+        return super().eventFilter(watched, event)
+
     def current_dungeon(self):
         for dungeon in self.dungeons:
             if dungeon["key"] == self.selected_dungeon_key:
@@ -623,6 +662,8 @@ class MainWindow(MainWindowUI):
     def update_monster_table(self, *_args):
         if not self.monster_table:
             return
+        if self.monster_table_updating:
+            return
 
         dungeon = self.current_dungeon()
         floors = dungeon.get("monster_floors", []) if dungeon else []
@@ -635,6 +676,21 @@ class MainWindow(MainWindowUI):
             if not isinstance(floor.get("floor"), int) or floor.get("floor") >= start_floor
         ]
 
+        self.monster_table_updating = True
+        self.monster_table.setUpdatesEnabled(False)
+        self.monster_table.clearSpans()
+        try:
+            if self.monster_table_wrap_checkbox.isChecked():
+                self.update_wrapped_monster_table(target)
+            else:
+                self.update_flat_monster_table(target)
+        finally:
+            self.monster_table.setUpdatesEnabled(True)
+            self.monster_table_updating = False
+
+        self.broadcast_monster_floor_state()
+
+    def update_flat_monster_table(self, target):
         self.monster_table.setRowCount(len(target))
         monster_slots = max((len(floor.get("monster_cells") or floor.get("monsters", [])) for floor in target), default=0)
         dekkai_slots = max((len(floor.get("dekkai_cells") or floor.get("dekkai_monsters", [])) for floor in target), default=0)
@@ -647,11 +703,14 @@ class MainWindow(MainWindowUI):
         )
         self.monster_table.setColumnCount(len(headers))
         self.monster_table.setHorizontalHeaderLabels(headers)
-        self.monster_table.setColumnWidth(0, 60)
+        self.monster_table.horizontalHeader().setStretchLastSection(True)
+        self.monster_table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
+        self.monster_table.setIconSize(self.monster_table_icon_size())
+        monster_column_width = self.monster_table_column_width()
         for column in range(1, len(headers)):
-            self.monster_table.setColumnWidth(column, 120)
+            self.monster_table.setColumnWidth(column, monster_column_width)
 
-        row_height = self.monster_table.fontMetrics().height() + 6
+        row_height = self.monster_table_row_height()
         self.monster_table.verticalHeader().setDefaultSectionSize(row_height)
 
         for row, floor in enumerate(target):
@@ -663,7 +722,90 @@ class MainWindow(MainWindowUI):
             self.fill_monster_cells(row, column, maze_slots, floor, "maze_cells", "maze_monsters")
             self.monster_table.setRowHeight(row, row_height)
 
-        self.broadcast_monster_floor_state()
+    def update_wrapped_monster_table(self, target):
+        cell_column_count = self.wrapped_monster_cell_column_count()
+        headers = ["階"] + [f"M{i}" for i in range(1, cell_column_count + 1)]
+        self.monster_table.setColumnCount(len(headers))
+        self.monster_table.setHorizontalHeaderLabels(headers)
+        self.monster_table.horizontalHeader().setStretchLastSection(False)
+        self.monster_table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
+        self.monster_table.setIconSize(self.monster_table_icon_size())
+        monster_column_width = self.monster_table_column_width()
+        for column in range(1, len(headers)):
+            self.monster_table.setColumnWidth(column, monster_column_width)
+
+        row_height = self.monster_table_row_height()
+        self.monster_table.verticalHeader().setDefaultSectionSize(row_height)
+        row = 0
+        floor_rows = []
+        for floor in target:
+            cells = self.monster_floor_table_cells(floor)
+            visual_row_count = max(1, (len(cells) + cell_column_count - 1) // cell_column_count)
+            floor_rows.append((floor, cells, row, visual_row_count))
+            row += visual_row_count
+
+        self.monster_table.setRowCount(row)
+        for floor, cells, start_row, visual_row_count in floor_rows:
+            self.set_monster_table_item(start_row, 0, self.format_floor_label(floor.get("floor", "")))
+            if visual_row_count > 1:
+                self.monster_table.setSpan(start_row, 0, visual_row_count, 1)
+
+            for visual_row in range(visual_row_count):
+                table_row = start_row + visual_row
+                self.monster_table.setRowHeight(table_row, row_height)
+                for column_offset in range(cell_column_count):
+                    cell_index = visual_row * cell_column_count + column_offset
+                    table_column = column_offset + 1
+                    if cell_index < len(cells):
+                        cell = cells[cell_index]
+                        self.set_monster_table_item(
+                            table_row,
+                            table_column,
+                            self.monster_table_cell_text(cell),
+                            cell.get("background", ""),
+                            cell.get("foreground", ""),
+                            cell.get("name", ""),
+                            cell.get("group", ""),
+                        )
+                    else:
+                        self.set_monster_table_item(table_row, table_column, "")
+
+    def monster_table_column_width(self):
+        icon_size = self.monster_table_icon_size().width()
+        if self.monster_table_icon_only_checkbox.isChecked():
+            return max(MONSTER_TABLE_ICON_COLUMN_WIDTH, icon_size + 24)
+        return max(MONSTER_TABLE_TEXT_COLUMN_WIDTH, icon_size + 118)
+
+    def monster_table_row_height(self):
+        return max(self.monster_table.fontMetrics().height() + 8, self.monster_table_icon_size().height() + 8)
+
+    def monster_table_icon_size(self):
+        size_key = self.monster_table_icon_size_combo.currentData()
+        icon_size = MONSTER_TABLE_ICON_SIZES.get(size_key, MONSTER_TABLE_ICON_SIZES["small"])
+        return QSize(icon_size, icon_size)
+
+    def wrapped_monster_cell_column_count(self):
+        available_width = max(1, self.monster_table.viewport().width() - MONSTER_TABLE_FLOOR_COLUMN_WIDTH - 4)
+        return max(1, available_width // self.monster_table_column_width())
+
+    def monster_floor_table_cells(self, floor):
+        cells = []
+        for cell_key, names_key, group in (
+            ("monster_cells", "monsters", "normal"),
+            ("dekkai_cells", "dekkai_monsters", "dekkai"),
+            ("maze_cells", "maze_monsters", "maze"),
+        ):
+            for cell in self.get_monster_cells(floor, cell_key, names_key):
+                merged = dict(cell)
+                merged["group"] = group
+                cells.append(merged)
+        return cells
+
+    def get_monster_cells(self, floor, cell_key, names_key):
+        cells = floor.get(cell_key)
+        if not cells:
+            cells = [{"name": name} for name in floor.get(names_key, [])]
+        return cells
 
     def selected_monster_floor(self):
         dungeon = self.current_dungeon()
@@ -811,24 +953,46 @@ class MainWindow(MainWindowUI):
         return f"{floor}F" if isinstance(floor, int) else str(floor)
 
     def fill_monster_cells(self, row, start_column, slot_count, floor, cell_key, names_key):
-        cells = floor.get(cell_key)
-        if not cells:
-            cells = [{"name": name} for name in floor.get(names_key, [])]
+        cells = self.get_monster_cells(floor, cell_key, names_key)
+        group = {
+            "monster_cells": "normal",
+            "dekkai_cells": "dekkai",
+            "maze_cells": "maze",
+        }.get(cell_key, "")
         for offset in range(slot_count):
             if offset < len(cells):
-                cell = cells[offset]
+                cell = dict(cells[offset])
+                cell["group"] = group
                 self.set_monster_table_item(
                     row,
                     start_column + offset,
-                    cell.get("name", ""),
+                    self.monster_table_cell_text(cell),
                     cell.get("background", ""),
                     cell.get("foreground", ""),
+                    cell.get("name", ""),
+                    group,
                 )
             else:
                 self.set_monster_table_item(row, start_column + offset, "")
         return start_column + slot_count
 
-    def set_monster_table_item(self, row, column, value, background="", foreground=""):
+    def monster_table_cell_text(self, cell):
+        if self.monster_table_icon_only_checkbox.isChecked() and cell.get("group") != "dekkai":
+            return ""
+        return cell.get("name", "")
+
+    def monster_icon_path(self, name):
+        for candidate in (name, MONSTER_ICON_NAME_ALIASES.get(name, "")):
+            filename = self.monster_icon_filename_map.get(candidate) or self.safe_icon_filename(candidate)
+            if not filename:
+                continue
+            for extension in ICON_EXTENSIONS:
+                path = Path("data/icons") / f"{filename}{extension}"
+                if path.exists():
+                    return path
+        return None
+
+    def set_monster_table_item(self, row, column, value, background="", foreground="", monster_name="", group=""):
         cell = QTableWidgetItem(str(value))
         background_color = QColor(background)
         if background and background_color.isValid():
@@ -836,6 +1000,13 @@ class MainWindow(MainWindowUI):
         foreground_color = QColor(foreground)
         if foreground and foreground != background and foreground_color.isValid():
             cell.setForeground(QBrush(foreground_color))
+        if monster_name and group != "dekkai":
+            icon_path = self.monster_icon_path(monster_name)
+            if icon_path:
+                cell.setIcon(QIcon(str(icon_path)))
+                cell.setToolTip(monster_name)
+        if monster_name and self.monster_table_icon_only_checkbox.isChecked():
+            cell.setToolTip(monster_name)
         self.monster_table.setItem(row, column, cell)
 
     def set_selected_items_identified(self, identified: bool):
@@ -982,6 +1153,9 @@ class MainWindow(MainWindowUI):
         self.save_const_memo_for_dungeon(self.selected_dungeon_key)
         self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
         self.siren_settings.params["selected_monster_floor"] = self.current_monster_floor()
+        self.siren_settings.params["monster_table_wrap"] = self.monster_table_wrap_checkbox.isChecked()
+        self.siren_settings.params["monster_table_icon_only"] = self.monster_table_icon_only_checkbox.isChecked()
+        self.siren_settings.params["monster_table_icon_size"] = self.monster_table_icon_size_combo.currentData()
         self.siren_settings.save_settings()
 
     def const_memos(self):
@@ -1014,6 +1188,9 @@ class MainWindow(MainWindowUI):
     def save_current_selection(self):
         self.siren_settings.params["selected_dungeon"] = self.selected_dungeon_key
         self.siren_settings.params["selected_monster_floor"] = self.current_monster_floor()
+        self.siren_settings.params["monster_table_wrap"] = self.monster_table_wrap_checkbox.isChecked()
+        self.siren_settings.params["monster_table_icon_only"] = self.monster_table_icon_only_checkbox.isChecked()
+        self.siren_settings.params["monster_table_icon_size"] = self.monster_table_icon_size_combo.currentData()
         self.siren_settings.save_settings()
 
     def save_image(self):
