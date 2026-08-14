@@ -76,6 +76,8 @@ build_exe_options = {
         "PIL",
         "numpy",
         "imagehash",
+        "dxcam",
+        "comtypes",
         "pickle",
         "bz2",
         "json",

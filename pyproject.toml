@@ -17,4 +17,5 @@ dependencies = [
     "bs4>=0.0.2",
     "paddleocr>=3.5.0",
     "cx-freeze>=8.6.4",
+    "dxcam>=0.0.5",
 ]

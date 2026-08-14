@@ -73,6 +73,21 @@ def capture_shiren_window(target_size=TARGET_SIZE) -> Image.Image:
     return image
 
 
+def get_shiren_window_bbox():
+    """Steam版シレン6のクライアント領域をスクリーン座標で返す。"""
+    if sys.platform != "win32":
+        raise DirectCaptureError("直接取得はWindows上でのみ利用できます")
+
+    hwnd = _get_target_hwnd()
+    if not hwnd:
+        raise DirectCaptureError("Steam版シレン6の表示中ウィンドウが見つかりません")
+
+    bbox = _client_bbox(hwnd)
+    if not bbox:
+        raise DirectCaptureError("ゲームウィンドウの取得範囲を特定できません")
+    return bbox
+
+
 def _get_target_hwnd():
     global _cached_hwnd
 

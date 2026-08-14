@@ -68,6 +68,7 @@ startup_trace("imported keyboard")
 
 from src.config import (
     CAPTURE_MODE_DIRECT,
+    CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
@@ -79,6 +80,8 @@ from src.config_dialog import ConfigDialog
 startup_trace("imported src.config_dialog")
 from src.direct_capture import capture_shiren_window
 startup_trace("imported src.direct_capture")
+from src.fullscreen_capture import capture_shiren_fullscreen
+startup_trace("imported src.fullscreen_capture")
 from src.dungeon_ocr import DungeonOcrReader
 from src.dungeon_ocr import normalize_ocr_text
 startup_trace("imported src.dungeon_ocr")
@@ -1224,7 +1227,11 @@ class MainWindow(MainWindowUI):
     def main_loop(self):
         """設定された取得方法でゲーム画面を定期取得する"""
         try:
-            if self.config.capture_mode not in (CAPTURE_MODE_OBS, CAPTURE_MODE_DIRECT):
+            if self.config.capture_mode not in (
+                CAPTURE_MODE_OBS,
+                CAPTURE_MODE_DIRECT,
+                CAPTURE_MODE_FULLSCREEN,
+            ):
                 self.capture_status = self.ui.main.waiting_capture
                 return
 
@@ -1325,6 +1332,8 @@ class MainWindow(MainWindowUI):
             return self.obs_manager.screen
         if self.config.capture_mode == CAPTURE_MODE_DIRECT:
             return capture_shiren_window(OCR_CAPTURE_SIZE)
+        if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
+            return capture_shiren_fullscreen(OCR_CAPTURE_SIZE)
         return None
 
     def on_capture_processed(self, result):

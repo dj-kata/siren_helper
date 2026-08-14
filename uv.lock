@@ -300,6 +300,15 @@ wheels = [
 ]
 
 [[package]]
+name = "comtypes"
+version = "1.4.16"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/2a/65274c13327f637ec13af8d39f2cf579d9ebe7a0e683696b5f05236d2805/comtypes-1.4.16.tar.gz", hash = "sha256:cd66d1add01265cface4df51ba1e31cd1657e04463c281c802e737e79e1ba93c", size = 260252, upload-time = "2026-03-02T23:11:42.413Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/7c/0eb685107290b6221c03c46d39214a4e42a124189691cb83ae3228257f46/comtypes-1.4.16-py3-none-any.whl", hash = "sha256:e18d85179ff12955524c5a8c3bc09cb3c0d890f1da4d7123d14244c7b78f84c8", size = 296230, upload-time = "2026-03-02T23:11:41.049Z" },
+]
+
+[[package]]
 name = "crc32c"
 version = "2.8"
 source = { registry = "https://pypi.org/simple" }
@@ -408,6 +417,22 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e9/11/971e423750b219ec3f3a7f27dfb9bd74aef3d3fdfee6cc7df10a0217b5cd/ds_store-1.3.2.tar.gz", hash = "sha256:e4da49df901123481a85b9250945f2aac054a0f0c29352cd2cc858c536cdd364", size = 26574, upload-time = "2025-12-04T00:52:46.178Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/03/83/7135cae57531edc070c73ea92b9129be0714323f5face6e15f415ca8ef52/ds_store-1.3.2-py3-none-any.whl", hash = "sha256:3b37332d9f8c18ff04c385d2933b66a1d84950071364f94bfc5f5a3ab1fb361e", size = 15928, upload-time = "2025-12-04T00:52:44.528Z" },
+]
+
+[[package]]
+name = "dxcam"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "comtypes" },
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/de/b7/b3d3e3fa42f347ac4b37fd639634935b4eefff1d5d61bdf72a6d8b906919/dxcam-0.3.0.tar.gz", hash = "sha256:d524da45adf70e044865e7d4e9098e655d6734951781155dda50c1292e20d8bd", size = 48742, upload-time = "2026-03-12T02:52:17.298Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/50/6eaa432be12554dfc44fde995134fda64c1bf7a58c3ae9555b411b2faf92/dxcam-0.3.0-cp311-cp311-win_amd64.whl", hash = "sha256:499aba3283349a19d09db67e98547c8cb686470491f0127463072bc45cf3d611", size = 338876, upload-time = "2026-03-12T02:52:11.394Z" },
+    { url = "https://files.pythonhosted.org/packages/32/3c/6aca1d8a906ccb5d7b5993b99822dbd60ac18470e88eee845afd927d678f/dxcam-0.3.0-cp312-cp312-win_amd64.whl", hash = "sha256:ab75b16529b8bd7337dfcb663525c338233a24b4c5b76193ced82a70e16edf49", size = 339445, upload-time = "2026-03-12T02:52:13.037Z" },
+    { url = "https://files.pythonhosted.org/packages/32/a0/f4c321b068cc1eb20aa56cd531c5cb449370d77b115075d9828853da8a05/dxcam-0.3.0-cp313-cp313-win_amd64.whl", hash = "sha256:d3de4d64e6d85a4c3c5b869dd35eba82d4784e5b6c4b1703e0cb09da14be9575", size = 339188, upload-time = "2026-03-12T02:52:14.622Z" },
+    { url = "https://files.pythonhosted.org/packages/be/a0/ef29032254cfb88d0ad595579c1cc9912dbd0d0ca8a525e0a235e87f5098/dxcam-0.3.0-cp314-cp314-win_amd64.whl", hash = "sha256:f08a8505b4ea0afbf1ad9f741c512030ef9119dd029f65a08a0e635f616113e0", size = 339467, upload-time = "2026-03-12T02:52:15.833Z" },
 ]
 
 [[package]]
@@ -1085,41 +1110,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/28/ec0fc38107fc32536908034e990c47914c57cd7c5a3ece4d8d8f7ffd7e27/pillow-12.2.0-pp311-pypy311_pp73-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:4a6c9fa44005fa37a91ebfc95d081e8079757d2e904b27103f4f5fa6f0bf78c0", size = 5355404, upload-time = "2026-04-01T14:46:06.33Z" },
     { url = "https://files.pythonhosted.org/packages/5e/8b/51b0eddcfa2180d60e41f06bd6d0a62202b20b59c68f5a132e615b75aecf/pillow-12.2.0-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:25373b66e0dd5905ed63fa3cae13c82fbddf3079f2c8bf15c6fb6a35586324c1", size = 6002215, upload-time = "2026-04-01T14:46:08.83Z" },
     { url = "https://files.pythonhosted.org/packages/bc/60/5382c03e1970de634027cee8e1b7d39776b778b81812aaf45b694dfe9e28/pillow-12.2.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:bfa9c230d2fe991bed5318a5f119bd6780cda2915cca595393649fc118ab895e", size = 7080946, upload-time = "2026-04-01T14:46:11.734Z" },
-]
-
-[[package]]
-name = "siren6-helper"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "bs4" },
-    { name = "cx-freeze" },
-    { name = "imagehash" },
-    { name = "keyboard" },
-    { name = "obsws-python" },
-    { name = "onnxocr" },
-    { name = "opencv-python" },
-    { name = "paddleocr" },
-    { name = "pillow" },
-    { name = "pyside6" },
-    { name = "requests" },
-    { name = "websockets" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "bs4", specifier = ">=0.0.2" },
-    { name = "cx-freeze", specifier = ">=8.6.4" },
-    { name = "imagehash", specifier = ">=4.3.2" },
-    { name = "keyboard", specifier = ">=0.13.5" },
-    { name = "obsws-python", specifier = ">=1.7.2" },
-    { name = "onnxocr", specifier = ">=2025.5" },
-    { name = "opencv-python", specifier = ">=4.11.0.86" },
-    { name = "paddleocr", specifier = ">=3.5.0" },
-    { name = "pillow", specifier = ">=10.0.0" },
-    { name = "pyside6", specifier = ">=6.7.0" },
-    { name = "requests", specifier = ">=2.33.1" },
-    { name = "websockets", specifier = ">=11.0" },
 ]
 
 [[package]]
@@ -4686,6 +4676,43 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f5/96/771a6e2b530f725303d16d78a321fa4876b98b4f3615c9851880df8c1a43/shiboken6-6.11.0-cp310-abi3-manylinux_2_39_aarch64.whl", hash = "sha256:a10dc7718104ea2dc15d5b0b96909b77162ce1c76fcc6968e6df692b947a00e9", size = 267456, upload-time = "2026-03-23T12:47:08.689Z" },
     { url = "https://files.pythonhosted.org/packages/72/f7/44c0c42c3f5f29dec457fd46ea0552174bcb8aa75becf03bbd90308ba07b/shiboken6-6.11.0-cp310-abi3-win_amd64.whl", hash = "sha256:483ff78a73c7b3189ca924abc694318084f078bcfeaffa68e32024ff2d025ee1", size = 1222132, upload-time = "2026-03-23T12:47:10.143Z" },
     { url = "https://files.pythonhosted.org/packages/fb/99/6e5ee21db2d6af84bbbd7d871d441dafeb069c6de5667b1aa49891a77c66/shiboken6-6.11.0-cp310-abi3-win_arm64.whl", hash = "sha256:3bd76cf56105ab2d62ecaff630366f11264f69b88d488f10f048da9a065781f4", size = 1783186, upload-time = "2026-03-23T12:47:11.832Z" },
+]
+
+[[package]]
+name = "siren6-helper"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "bs4" },
+    { name = "cx-freeze" },
+    { name = "dxcam" },
+    { name = "imagehash" },
+    { name = "keyboard" },
+    { name = "obsws-python" },
+    { name = "onnxocr" },
+    { name = "opencv-python" },
+    { name = "paddleocr" },
+    { name = "pillow" },
+    { name = "pyside6" },
+    { name = "requests" },
+    { name = "websockets" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "bs4", specifier = ">=0.0.2" },
+    { name = "cx-freeze", specifier = ">=8.6.4" },
+    { name = "dxcam", specifier = ">=0.0.5" },
+    { name = "imagehash", specifier = ">=4.3.2" },
+    { name = "keyboard", specifier = ">=0.13.5" },
+    { name = "obsws-python", specifier = ">=1.7.2" },
+    { name = "onnxocr", specifier = ">=2025.5" },
+    { name = "opencv-python", specifier = ">=4.11.0.86" },
+    { name = "paddleocr", specifier = ">=3.5.0" },
+    { name = "pillow", specifier = ">=10.0.0" },
+    { name = "pyside6", specifier = ">=6.7.0" },
+    { name = "requests", specifier = ">=2.33.1" },
+    { name = "websockets", specifier = ">=11.0" },
 ]
 
 [[package]]
