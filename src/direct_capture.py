@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 TARGET_EXE_NAMES = ("ShirenTheWanderer6.exe", "ShirenTheWanderer.exe")
 TARGET_SIZE = OCR_CAPTURE_SIZE
+_cached_hwnd = None
 
 
 class DirectCaptureError(RuntimeError):
@@ -27,6 +28,8 @@ if sys.platform == "win32":
 
     user32.EnumWindows.argtypes = [EnumWindowsProc, wintypes.LPARAM]
     user32.EnumWindows.restype = wintypes.BOOL
+    user32.IsWindow.argtypes = [wintypes.HWND]
+    user32.IsWindow.restype = wintypes.BOOL
     user32.IsWindowVisible.argtypes = [wintypes.HWND]
     user32.IsWindowVisible.restype = wintypes.BOOL
     user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
@@ -56,7 +59,7 @@ def capture_shiren_window(target_size=TARGET_SIZE) -> Image.Image:
     if sys.platform != "win32":
         raise DirectCaptureError("直接取得はWindows上でのみ利用できます")
 
-    hwnd = _find_window_by_exe(TARGET_EXE_NAMES)
+    hwnd = _get_target_hwnd()
     if not hwnd:
         raise DirectCaptureError("Steam版シレン6の表示中ウィンドウが見つかりません")
 
@@ -68,6 +71,33 @@ def capture_shiren_window(target_size=TARGET_SIZE) -> Image.Image:
     if image.size != target_size:
         image = image.resize(target_size, Image.Resampling.LANCZOS)
     return image
+
+
+def _get_target_hwnd():
+    global _cached_hwnd
+
+    if _is_valid_target_window(_cached_hwnd):
+        return _cached_hwnd
+
+    _cached_hwnd = _find_window_by_exe(TARGET_EXE_NAMES)
+    return _cached_hwnd
+
+
+def _is_valid_target_window(hwnd):
+    if not hwnd:
+        return False
+    if not user32.IsWindow(hwnd) or not user32.IsWindowVisible(hwnd):
+        return False
+
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    process_path = _process_path(pid.value)
+    if not process_path:
+        return False
+
+    return os.path.basename(process_path).lower() in {
+        exe_name.lower() for exe_name in TARGET_EXE_NAMES
+    }
 
 
 def _find_window_by_exe(exe_names):
