@@ -28,16 +28,16 @@ def is_debug_mode_enabled_from_config():
 
 if getattr(sys, "frozen", False):
     os.chdir(Path(sys.executable).resolve().parent)
-    if is_debug_mode_enabled_from_config():
+    try:
         Path("log").mkdir(exist_ok=True)
         _native_crash_log = open(Path("log") / "native_crash.log", "a", encoding="utf-8")
         faulthandler.enable(_native_crash_log)
+    except Exception:
+        pass
 
 
 def startup_trace(message):
     if not getattr(sys, "frozen", False):
-        return
-    if not is_debug_mode_enabled_from_config():
         return
     try:
         log_dir = Path("log")
@@ -105,6 +105,8 @@ from src.shop_ocr import ShopOcrReader
 startup_trace("imported src.shop_ocr")
 from src.status_ocr import StatusOcrReader
 startup_trace("imported src.status_ocr")
+from src.update import start_auto_update_check
+startup_trace("imported src.update")
 from src.websocket_server import DataWebSocketServer
 startup_trace("imported src.websocket_server")
 
@@ -113,14 +115,15 @@ startup_trace("created logger")
 
 
 def write_fatal_error(exc):
-    if not is_debug_mode_enabled_from_config():
-        return
-    log_dir = Path("log")
-    log_dir.mkdir(exist_ok=True)
-    with (log_dir / "fatal_error.log").open("a", encoding="utf-8") as f:
-        f.write(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {exc}\n")
-        f.write(traceback.format_exc())
-        f.write("\n")
+    try:
+        log_dir = Path("log")
+        log_dir.mkdir(exist_ok=True)
+        with (log_dir / "fatal_error.log").open("a", encoding="utf-8") as f:
+            f.write(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {exc}\n")
+            f.write(traceback.format_exc())
+            f.write("\n")
+    except Exception:
+        pass
 
 try:
     with open("version.txt", "r", encoding="utf-8") as f:
@@ -2360,29 +2363,10 @@ def main():
     startup_trace("set window icon")
     window.show()
     startup_trace("showed MainWindow")
-    QTimer.singleShot(1000, check_for_updates_on_start)
+    start_auto_update_check(window, SWVER)
     startup_trace("scheduled update check")
 
     sys.exit(app.exec())
-
-
-def check_for_updates_on_start():
-    try:
-        from src.update import GitHubUpdater
-        startup_trace("imported src.update")
-
-        updater = GitHubUpdater(
-            github_author="dj-kata",
-            github_repo="siren_helper",
-            zipfile_basename="siren6_helper",
-            current_version=SWVER,
-            main_exe_name="siren6_helper.exe",
-            updator_exe_name="siren6_helper.exe",
-        )
-        updater.check_and_update()
-    except Exception as exc:
-        logger.error(f"アップデート確認エラー: {traceback.format_exc()}")
-        write_fatal_error(exc)
 
 
 if __name__ == "__main__":
