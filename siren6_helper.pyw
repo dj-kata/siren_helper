@@ -2360,11 +2360,8 @@ def main():
     startup_trace("set window icon")
     window.show()
     startup_trace("showed MainWindow")
-    if not getattr(sys, "frozen", False):
-        QTimer.singleShot(1000, check_for_updates_on_start)
-        startup_trace("scheduled update check")
-    else:
-        startup_trace("skipped update check in frozen app")
+    QTimer.singleShot(1000, check_for_updates_on_start)
+    startup_trace("scheduled update check")
 
     sys.exit(app.exec())
 
@@ -2376,7 +2373,7 @@ def check_for_updates_on_start():
 
         updater = GitHubUpdater(
             github_author="dj-kata",
-            github_repo="siren5_helper",
+            github_repo="siren_helper",
             zipfile_basename="siren6_helper",
             current_version=SWVER,
             main_exe_name="siren6_helper.exe",
