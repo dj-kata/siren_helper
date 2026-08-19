@@ -349,8 +349,9 @@ class MainWindowUI(QMainWindow):
         button_layout.addStretch()
         item_layout.addLayout(button_layout)
 
-        manual_layout = QHBoxLayout()
-        manual_layout.addWidget(QLabel("手動サーチ:"))
+        manual_layout = QVBoxLayout()
+        manual_top_layout = QHBoxLayout()
+        manual_top_layout.addWidget(QLabel("手動サーチ:"))
         self.item_monster_manual_shop_category_combo = QComboBox()
         for key, label in [
             ("kusa", "草"),
@@ -361,14 +362,14 @@ class MainWindowUI(QMainWindow):
             ("tue", "杖"),
         ]:
             self.item_monster_manual_shop_category_combo.addItem(label, key)
-        manual_layout.addWidget(self.item_monster_manual_shop_category_combo)
-        manual_layout.addWidget(QLabel("値段:"))
+        manual_top_layout.addWidget(self.item_monster_manual_shop_category_combo)
+        manual_top_layout.addWidget(QLabel("値段:"))
         self.item_monster_manual_shop_price_edit = QLineEdit()
         self.item_monster_manual_shop_price_edit.setValidator(QIntValidator(0, 999999))
         self.item_monster_manual_shop_price_edit.setPlaceholderText("G")
         self.item_monster_manual_shop_price_edit.setMaximumWidth(110)
-        manual_layout.addWidget(self.item_monster_manual_shop_price_edit)
-        manual_layout.addWidget(QLabel("価格種別:"))
+        manual_top_layout.addWidget(self.item_monster_manual_shop_price_edit)
+        manual_top_layout.addWidget(QLabel("価格種別:"))
         self.item_monster_manual_shop_price_kind_group = QButtonGroup(self)
         self.item_monster_manual_shop_price_kind_none = QRadioButton("指定なし")
         self.item_monster_manual_shop_price_kind_buy = QRadioButton("買値")
@@ -381,14 +382,19 @@ class MainWindowUI(QMainWindow):
         ]:
             self.item_monster_manual_shop_price_kind_group.addButton(button)
             button.setProperty("price_kind", price_kind)
-            manual_layout.addWidget(button)
-        manual_layout.addWidget(QLabel("未識別名:"))
+            manual_top_layout.addWidget(button)
+        manual_top_layout.addStretch()
+        manual_layout.addLayout(manual_top_layout)
+
+        manual_bottom_layout = QHBoxLayout()
+        manual_bottom_layout.addWidget(QLabel("未識別名:"))
         self.item_monster_manual_shop_name_edit = QLineEdit()
         self.item_monster_manual_shop_name_edit.setMaximumWidth(180)
-        manual_layout.addWidget(self.item_monster_manual_shop_name_edit)
+        manual_bottom_layout.addWidget(self.item_monster_manual_shop_name_edit)
         self.item_monster_manual_shop_add_button = QPushButton("識別候補に追加")
-        manual_layout.addWidget(self.item_monster_manual_shop_add_button)
-        manual_layout.addStretch()
+        manual_bottom_layout.addWidget(self.item_monster_manual_shop_add_button)
+        manual_bottom_layout.addStretch()
+        manual_layout.addLayout(manual_bottom_layout)
         item_layout.addLayout(manual_layout)
 
         count_layout = QHBoxLayout()

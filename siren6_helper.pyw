@@ -701,14 +701,18 @@ class MainWindow(MainWindowUI):
         if not splitter:
             return
         sizes = self.siren_settings.params.get("item_monster_splitter_sizes", [])
+        total = sum(sizes) if isinstance(sizes, list) else 0
         if (
             isinstance(sizes, list)
             and len(sizes) == 2
             and all(isinstance(size, int) and size > 0 for size in sizes)
+            and total > 0
+            and all(size / total >= 0.25 for size in sizes)
         ):
             splitter.setSizes(sizes)
         else:
-            splitter.setSizes([1, 1])
+            width = max(2, splitter.width())
+            splitter.setSizes([width // 2, width - width // 2])
 
     def connect_gui_state_signals(self):
         self.dungeon_data_tabs.currentChanged.connect(lambda _index: self.save_current_selection())
