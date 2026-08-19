@@ -67,8 +67,11 @@ class MainWindowUI(QMainWindow):
         self.item_tables = {}
         self.item_monster_item_tables = {}
         self.item_count_labels = {}
+        self.item_monster_item_count_labels = {}
         self.mark_identified_button = None
         self.mark_unknown_button = None
+        self.item_monster_mark_identified_button = None
+        self.item_monster_mark_unknown_button = None
         self.manual_shop_category_combo = None
         self.manual_shop_price_edit = None
         self.manual_shop_price_kind_group = None
@@ -77,6 +80,14 @@ class MainWindowUI(QMainWindow):
         self.manual_shop_price_kind_sell = None
         self.manual_shop_name_edit = None
         self.manual_shop_add_button = None
+        self.item_monster_manual_shop_category_combo = None
+        self.item_monster_manual_shop_price_edit = None
+        self.item_monster_manual_shop_price_kind_group = None
+        self.item_monster_manual_shop_price_kind_none = None
+        self.item_monster_manual_shop_price_kind_buy = None
+        self.item_monster_manual_shop_price_kind_sell = None
+        self.item_monster_manual_shop_name_edit = None
+        self.item_monster_manual_shop_add_button = None
         self.reset_button = None
         self.memo_edit = None
         self.memo_const_edit = None
@@ -316,6 +327,72 @@ class MainWindowUI(QMainWindow):
             self.item_monster_item_tables[key] = table
             self.item_monster_identify_tabs.addTab(table, label)
         item_layout.addWidget(self.item_monster_identify_tabs)
+
+        button_layout = QHBoxLayout()
+        self.item_monster_mark_identified_button = QPushButton("識別済にする")
+        self.item_monster_mark_unknown_button = QPushButton("未識別に戻す")
+        button_layout.addWidget(self.item_monster_mark_identified_button)
+        button_layout.addWidget(self.item_monster_mark_unknown_button)
+        button_layout.addStretch()
+        item_layout.addLayout(button_layout)
+
+        manual_layout = QHBoxLayout()
+        manual_layout.addWidget(QLabel("手動サーチ:"))
+        self.item_monster_manual_shop_category_combo = QComboBox()
+        for key, label in [
+            ("kusa", "草"),
+            ("makimono", "巻物"),
+            ("udewa", "腕輪"),
+            ("tubo", "壺"),
+            ("okou", "お香"),
+            ("tue", "杖"),
+        ]:
+            self.item_monster_manual_shop_category_combo.addItem(label, key)
+        manual_layout.addWidget(self.item_monster_manual_shop_category_combo)
+        manual_layout.addWidget(QLabel("値段:"))
+        self.item_monster_manual_shop_price_edit = QLineEdit()
+        self.item_monster_manual_shop_price_edit.setValidator(QIntValidator(0, 999999))
+        self.item_monster_manual_shop_price_edit.setPlaceholderText("G")
+        self.item_monster_manual_shop_price_edit.setMaximumWidth(110)
+        manual_layout.addWidget(self.item_monster_manual_shop_price_edit)
+        manual_layout.addWidget(QLabel("価格種別:"))
+        self.item_monster_manual_shop_price_kind_group = QButtonGroup(self)
+        self.item_monster_manual_shop_price_kind_none = QRadioButton("指定なし")
+        self.item_monster_manual_shop_price_kind_buy = QRadioButton("買値")
+        self.item_monster_manual_shop_price_kind_sell = QRadioButton("売値")
+        self.item_monster_manual_shop_price_kind_none.setChecked(True)
+        for button, price_kind in [
+            (self.item_monster_manual_shop_price_kind_none, "manual"),
+            (self.item_monster_manual_shop_price_kind_buy, "buy"),
+            (self.item_monster_manual_shop_price_kind_sell, "sell"),
+        ]:
+            self.item_monster_manual_shop_price_kind_group.addButton(button)
+            button.setProperty("price_kind", price_kind)
+            manual_layout.addWidget(button)
+        manual_layout.addWidget(QLabel("未識別名:"))
+        self.item_monster_manual_shop_name_edit = QLineEdit()
+        self.item_monster_manual_shop_name_edit.setMaximumWidth(180)
+        manual_layout.addWidget(self.item_monster_manual_shop_name_edit)
+        self.item_monster_manual_shop_add_button = QPushButton("識別候補に追加")
+        manual_layout.addWidget(self.item_monster_manual_shop_add_button)
+        manual_layout.addStretch()
+        item_layout.addLayout(manual_layout)
+
+        count_layout = QHBoxLayout()
+        for key, label in [
+            ("kusa", "草"),
+            ("makimono", "巻物"),
+            ("udewa", "腕輪"),
+            ("tubo", "壺"),
+            ("okou", "お香"),
+            ("tue", "杖"),
+        ]:
+            count_layout.addWidget(QLabel(f"{label}:"))
+            count = QLabel("0/0")
+            self.item_monster_item_count_labels[key] = count
+            count_layout.addWidget(count)
+        count_layout.addStretch()
+        item_layout.addLayout(count_layout)
 
         monster_panel = QWidget()
         monster_layout = QVBoxLayout(monster_panel)

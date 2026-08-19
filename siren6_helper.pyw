@@ -296,6 +296,7 @@ class MainWindow(MainWindowUI):
         self.obs_entou_alert_trigger_active = False
         self.last_shop_result_signature = None
         self.last_shop_status_message = ""
+        self.manual_shop_controls_syncing = False
         self.item_identification_revision = 0
         self.shop_candidate_history = {}
         self.shop_price_visible = False
@@ -496,10 +497,31 @@ class MainWindow(MainWindowUI):
             )
         self.mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
         self.mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
-        self.manual_shop_category_combo.currentIndexChanged.connect(self.update_manual_shop_price_search)
-        self.manual_shop_price_edit.textChanged.connect(self.update_manual_shop_price_search)
-        self.manual_shop_price_kind_group.buttonClicked.connect(lambda _button: self.update_manual_shop_price_search())
-        self.manual_shop_add_button.clicked.connect(self.add_manual_shop_candidate)
+        if self.item_monster_mark_identified_button:
+            self.item_monster_mark_identified_button.clicked.connect(lambda: self.set_selected_items_identified(True))
+        if self.item_monster_mark_unknown_button:
+            self.item_monster_mark_unknown_button.clicked.connect(lambda: self.set_selected_items_identified(False))
+        self.manual_shop_category_combo.currentIndexChanged.connect(
+            lambda _index: self.on_manual_shop_controls_changed("item")
+        )
+        self.manual_shop_price_edit.textChanged.connect(lambda _text: self.on_manual_shop_controls_changed("item"))
+        self.manual_shop_price_kind_group.buttonClicked.connect(
+            lambda _button: self.on_manual_shop_controls_changed("item")
+        )
+        self.manual_shop_add_button.clicked.connect(lambda: self.add_manual_shop_candidate("item"))
+        if self.item_monster_manual_shop_category_combo:
+            self.item_monster_manual_shop_category_combo.currentIndexChanged.connect(
+                lambda _index: self.on_manual_shop_controls_changed("item_monster")
+            )
+            self.item_monster_manual_shop_price_edit.textChanged.connect(
+                lambda _text: self.on_manual_shop_controls_changed("item_monster")
+            )
+            self.item_monster_manual_shop_price_kind_group.buttonClicked.connect(
+                lambda _button: self.on_manual_shop_controls_changed("item_monster")
+            )
+            self.item_monster_manual_shop_add_button.clicked.connect(
+                lambda: self.add_manual_shop_candidate("item_monster")
+            )
         self.reset_button.clicked.connect(self.reset_identification)
         self.monster_table_wrap_checkbox.setChecked(
             bool(self.siren_settings.params.get("monster_table_wrap", False))
@@ -660,14 +682,19 @@ class MainWindow(MainWindowUI):
         if not self.dungeon_data_tabs:
             return None
 
-        current_label = self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex())
-        if current_label == "アイテム+モンスター" and getattr(self, "item_monster_identify_tabs", None):
+        if self.is_item_monster_tab_active() and getattr(self, "item_monster_identify_tabs", None):
             return self.item_monster_identify_tabs
 
+        current_label = self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex())
         item_index = self.find_dungeon_data_tab("アイテム")
         if item_index >= 0 and current_label != "アイテム":
             self.dungeon_data_tabs.setCurrentIndex(item_index)
         return self.identify_tabs
+
+    def is_item_monster_tab_active(self):
+        if not self.dungeon_data_tabs:
+            return False
+        return self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex()) == "アイテム+モンスター"
 
     def find_dungeon_data_tab(self, label):
         if not self.dungeon_data_tabs:
@@ -1091,12 +1118,15 @@ class MainWindow(MainWindowUI):
         table.setItem(row, column, cell)
 
     def set_selected_items_identified(self, identified: bool):
-        category = ITEM_CATEGORIES[self.identify_tabs.currentIndex()]
+        tabs = self.active_item_tabs()
+        if not tabs:
+            return
+        category = ITEM_CATEGORIES[tabs.currentIndex()]
         if category in ("buki", "tate"):
             self.statusBar().showMessage("武器・盾は識別状態の変更対象外です", 3000)
             return
 
-        table = self.item_tables[category]
+        table = tabs.currentWidget()
         selected_rows = sorted({index.row() for index in table.selectionModel().selectedRows()})
         if not selected_rows:
             self.statusBar().showMessage("変更する行を選択してください", 3000)
@@ -1148,12 +1178,13 @@ class MainWindow(MainWindowUI):
         self.statusBar().showMessage("リセットしました", 3000)
 
     def reset_manual_shop_search(self):
-        if self.manual_shop_price_kind_none:
-            self.manual_shop_price_kind_none.setChecked(True)
-        if self.manual_shop_price_edit:
-            self.manual_shop_price_edit.clear()
-        if self.manual_shop_name_edit:
-            self.manual_shop_name_edit.clear()
+        for controls in self.manual_shop_control_sets():
+            if controls["price_kind_none"]:
+                controls["price_kind_none"].setChecked(True)
+            if controls["price_edit"]:
+                controls["price_edit"].clear()
+            if controls["name_edit"]:
+                controls["name_edit"].clear()
 
     def touch_item_identification_state(self):
         self.item_identification_revision += 1
@@ -1167,6 +1198,8 @@ class MainWindow(MainWindowUI):
         counts = self.get_item_stats()
         for category, (count, total) in counts.items():
             self.item_count_labels[category].setText(f"{count}/{total}")
+            if category in self.item_monster_item_count_labels:
+                self.item_monster_item_count_labels[category].setText(f"{count}/{total}")
 
         self.write_stat_xml(counts)
         self.update_monster_table()
@@ -2045,8 +2078,81 @@ class MainWindow(MainWindowUI):
                 candidates.append(candidate)
         return self.sort_shop_price_candidates(candidates)
 
-    def current_manual_shop_price(self):
-        text = self.manual_shop_price_edit.text().strip().replace(",", "")
+    def manual_shop_controls(self, source="item"):
+        if source == "item_monster" and self.item_monster_manual_shop_category_combo:
+            return {
+                "category_combo": self.item_monster_manual_shop_category_combo,
+                "price_edit": self.item_monster_manual_shop_price_edit,
+                "price_kind_group": self.item_monster_manual_shop_price_kind_group,
+                "price_kind_none": self.item_monster_manual_shop_price_kind_none,
+                "name_edit": self.item_monster_manual_shop_name_edit,
+            }
+        return {
+            "category_combo": self.manual_shop_category_combo,
+            "price_edit": self.manual_shop_price_edit,
+            "price_kind_group": self.manual_shop_price_kind_group,
+            "price_kind_none": self.manual_shop_price_kind_none,
+            "name_edit": self.manual_shop_name_edit,
+        }
+
+    def manual_shop_control_sets(self):
+        controls = [self.manual_shop_controls("item")]
+        if self.item_monster_manual_shop_category_combo:
+            controls.append(self.manual_shop_controls("item_monster"))
+        return controls
+
+    def manual_shop_price_kind_from_controls(self, controls):
+        checked = controls["price_kind_group"].checkedButton()
+        if not checked:
+            return "manual"
+        return checked.property("price_kind") or "manual"
+
+    def sync_manual_shop_controls(self, source):
+        if self.manual_shop_controls_syncing:
+            return
+
+        source_controls = self.manual_shop_controls(source)
+        category = source_controls["category_combo"].currentData()
+        price_text = source_controls["price_edit"].text()
+        price_kind = self.manual_shop_price_kind_from_controls(source_controls)
+        name_text = source_controls["name_edit"].text()
+
+        self.manual_shop_controls_syncing = True
+        try:
+            for controls in self.manual_shop_control_sets():
+                if controls["category_combo"] is source_controls["category_combo"]:
+                    continue
+                widgets = [
+                    controls["category_combo"],
+                    controls["price_edit"],
+                    controls["name_edit"],
+                    controls["price_kind_group"],
+                ]
+                previous_blocks = [widget.blockSignals(True) for widget in widgets]
+                try:
+                    index = controls["category_combo"].findData(category)
+                    if index >= 0:
+                        controls["category_combo"].setCurrentIndex(index)
+                    controls["price_edit"].setText(price_text)
+                    controls["name_edit"].setText(name_text)
+                    for button in controls["price_kind_group"].buttons():
+                        if button.property("price_kind") == price_kind:
+                            button.setChecked(True)
+                            break
+                finally:
+                    for widget, blocked in zip(widgets, previous_blocks):
+                        widget.blockSignals(blocked)
+        finally:
+            self.manual_shop_controls_syncing = False
+
+    def on_manual_shop_controls_changed(self, source):
+        if self.manual_shop_controls_syncing:
+            return
+        self.sync_manual_shop_controls(source)
+        self.update_manual_shop_price_search(source)
+
+    def current_manual_shop_price(self, source="item"):
+        text = self.manual_shop_controls(source)["price_edit"].text().strip().replace(",", "")
         if not text:
             return None
         try:
@@ -2054,11 +2160,8 @@ class MainWindow(MainWindowUI):
         except ValueError:
             return None
 
-    def current_manual_shop_price_kind(self):
-        checked = self.manual_shop_price_kind_group.checkedButton()
-        if not checked:
-            return "manual"
-        return checked.property("price_kind") or "manual"
+    def current_manual_shop_price_kind(self, source="item"):
+        return self.manual_shop_price_kind_from_controls(self.manual_shop_controls(source))
 
     def manual_shop_result(self, category, price, price_kind, name=""):
         category_label = ITEM_CATEGORY_LABELS.get(category, category)
@@ -2071,19 +2174,20 @@ class MainWindow(MainWindowUI):
             raw_texts=[],
         )
 
-    def update_manual_shop_price_search(self):
-        if not self.manual_shop_category_combo or not self.manual_shop_price_edit:
+    def update_manual_shop_price_search(self, source="item"):
+        controls = self.manual_shop_controls(source)
+        if not controls["category_combo"] or not controls["price_edit"]:
             return
 
-        category = self.manual_shop_category_combo.currentData()
-        price = self.current_manual_shop_price()
-        price_kind = self.current_manual_shop_price_kind()
+        category = controls["category_combo"].currentData()
+        price = self.current_manual_shop_price(source)
+        price_kind = self.current_manual_shop_price_kind(source)
         if not category or price is None:
             self.hide_shop_price_state()
             return
 
         candidates = self.find_manual_shop_price_candidates(category, price, price_kind)
-        result = self.manual_shop_result(category, price, price_kind, self.manual_shop_name_edit.text())
+        result = self.manual_shop_result(category, price, price_kind, controls["name_edit"].text())
         self.broadcast_shop_price_state(result, category, candidates)
         items = [candidate[0] for candidate in candidates]
         self.select_items_in_table(category, items)
@@ -2101,11 +2205,13 @@ class MainWindow(MainWindowUI):
         else:
             self.statusBar().showMessage(f"手動サーチ候補なし: {category_label} {price_kind_label}{price}G", 5000)
 
-    def add_manual_shop_candidate(self):
-        category = self.manual_shop_category_combo.currentData()
-        price = self.current_manual_shop_price()
-        price_kind = self.current_manual_shop_price_kind()
-        name = self.manual_shop_name_edit.text().strip()
+    def add_manual_shop_candidate(self, source="item"):
+        self.sync_manual_shop_controls(source)
+        controls = self.manual_shop_controls(source)
+        category = controls["category_combo"].currentData()
+        price = self.current_manual_shop_price(source)
+        price_kind = self.current_manual_shop_price_kind(source)
+        name = controls["name_edit"].text().strip()
         if not category or price is None:
             self.statusBar().showMessage("カテゴリと値段を入力してください", 3000)
             return
@@ -2118,8 +2224,9 @@ class MainWindow(MainWindowUI):
 
         if name and candidates:
             self.remember_shop_price_candidates(result, category, candidates)
-            self.manual_shop_price_edit.clear()
-            self.manual_shop_name_edit.clear()
+            for controls in self.manual_shop_control_sets():
+                controls["price_edit"].clear()
+                controls["name_edit"].clear()
             self.statusBar().showMessage(f"識別候補に追加しました: {name}", 4000)
         elif name:
             self.statusBar().showMessage(f"追加できる候補がありません: {name}", 4000)
@@ -2318,15 +2425,23 @@ class MainWindow(MainWindowUI):
         })
 
     def select_items_in_table(self, category, items):
-        table = self.item_tables.get(category)
+        primary_table = self.item_tables.get(category)
+        item_monster_table = self.item_monster_item_tables.get(category)
+        table = item_monster_table if self.is_item_monster_tab_active() and item_monster_table else primary_table
         if not table:
             return
 
         if self.top_tabs:
             self.top_tabs.setCurrentIndex(0)
-        self.dungeon_data_tabs.setCurrentIndex(0)
         tab_index = ITEM_CATEGORIES.index(category)
-        self.identify_tabs.setCurrentIndex(tab_index)
+        if table is item_monster_table:
+            item_monster_index = self.find_dungeon_data_tab("アイテム+モンスター")
+            if item_monster_index >= 0:
+                self.dungeon_data_tabs.setCurrentIndex(item_monster_index)
+            self.item_monster_identify_tabs.setCurrentIndex(tab_index)
+        else:
+            self.dungeon_data_tabs.setCurrentIndex(0)
+            self.identify_tabs.setCurrentIndex(tab_index)
 
         table.clearSelection()
         target = self.get_target_items(category)
