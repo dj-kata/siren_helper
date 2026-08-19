@@ -4,7 +4,6 @@ import os
 import sys
 import re
 import json
-import requests
 import shutil
 import shlex
 import subprocess
@@ -14,11 +13,11 @@ import tempfile
 import urllib.request
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from packaging import version
 
 import traceback
-from bs4 import BeautifulSoup
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 from src.logger import get_logger
@@ -52,6 +51,7 @@ class AutoUpdater(QObject):
         self._current_version = current_version
 
     def start(self) -> None:
+        _write_update_trace(f"start update check thread: current={self._current_version}")
         thread = threading.Thread(target=self._check_worker, daemon=True)
         thread.start()
 
@@ -61,28 +61,40 @@ class AutoUpdater(QObject):
 
     def _check_worker(self) -> None:
         try:
+            _write_update_trace("check worker started")
             info = check_for_qt_updates(self._current_version)
         except Exception as exc:
             logger.error(traceback.format_exc())
+            _write_update_trace(f"check failed: {exc}")
             self.check_failed.emit(str(exc))
             return
 
         if info is not None:
+            _write_update_trace(f"update found: latest={info.version}, current={info.current_version}")
             self.update_found.emit(info)
+        else:
+            _write_update_trace("no update found")
 
     def _install_worker(self, info: UpdateInfo) -> None:
         try:
+            _write_update_trace(f"install worker started: version={info.version}")
             script_path = prepare_qt_update(info)
         except Exception as exc:
             logger.error(traceback.format_exc())
+            _write_update_trace(f"install failed: {exc}")
             self.install_failed.emit(str(exc))
             return
 
+        _write_update_trace(f"install script ready: {script_path}")
         self.install_ready.emit(str(script_path))
 
 
 def start_auto_update_check(parent: QWidget, current_version: str) -> None:
+    _write_update_trace(
+        f"start_auto_update_check called: frozen={getattr(sys, 'frozen', False)}, current={current_version}"
+    )
     if not getattr(sys, "frozen", False):
+        _write_update_trace("skip update check: not frozen")
         return
 
     updater = AutoUpdater(parent, current_version)
@@ -90,6 +102,7 @@ def start_auto_update_check(parent: QWidget, current_version: str) -> None:
     updater.update_found.connect(lambda info: _prompt_qt_update(parent, updater, info))
     updater.install_ready.connect(_run_qt_update_script)
     updater.install_failed.connect(lambda message: _show_qt_install_error(parent, message))
+    updater.check_failed.connect(lambda message: _write_update_trace(f"check_failed signal: {message}"))
     updater.start()
 
 
@@ -97,9 +110,20 @@ def app_root() -> Path:
     return Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path.cwd()
 
 
+def _write_update_trace(message: str) -> None:
+    try:
+        log_dir = app_root() / "log"
+        log_dir.mkdir(exist_ok=True)
+        with (log_dir / "update_trace.log").open("a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().isoformat(timespec='seconds')}] {message}\n")
+    except Exception:
+        pass
+
+
 def check_for_qt_updates(current_version: str) -> UpdateInfo | None:
     release = _fetch_latest_siren6_release()
     if release is None:
+        _write_update_trace("siren6 release not found")
         return None
 
     latest_version = str(release.get("tag_name") or release.get("name") or "").strip()
@@ -107,13 +131,16 @@ def check_for_qt_updates(current_version: str) -> UpdateInfo | None:
     current_for_compare = _extract_optional_prefixed_version(current_version)
     if latest_for_compare is None or current_for_compare is None:
         logger.info(f"version parse failed: latest={latest_version}, current={current_version}")
+        _write_update_trace(f"version parse failed: latest={latest_version}, current={current_version}")
         return None
     if latest_for_compare <= current_for_compare:
+        _write_update_trace(f"already latest: latest={latest_version}, current={current_version}")
         return None
 
     asset_url = _asset_download_url(release)
     if not asset_url:
         logger.info(f"release asset not found: {RELEASE_ASSET_NAME}")
+        _write_update_trace(f"release asset not found: {RELEASE_ASSET_NAME}")
         return None
 
     return UpdateInfo(
@@ -167,6 +194,7 @@ def _show_qt_install_error(parent: QWidget, message: str) -> None:
 
 def _run_qt_update_script(script_path_text: str) -> None:
     script_path = Path(script_path_text)
+    _write_update_trace(f"run update script: {script_path}")
     if sys.platform.startswith("win"):
         subprocess.Popen(
             [
@@ -188,8 +216,10 @@ def _run_qt_update_script(script_path_text: str) -> None:
 
 
 def _fetch_latest_siren6_release() -> dict[str, object] | None:
+    _write_update_trace(f"fetch releases: {GITHUB_REPOSITORY}")
     releases = _fetch_json(f"https://api.github.com/repos/{GITHUB_REPOSITORY}/releases")
     if not isinstance(releases, list):
+        _write_update_trace(f"unexpected releases response: {type(releases).__name__}")
         return None
 
     for release in releases:
@@ -197,7 +227,9 @@ def _fetch_latest_siren6_release() -> dict[str, object] | None:
             continue
         tag_name = str(release.get("tag_name") or release.get("name") or "").strip()
         if _extract_prefixed_version(tag_name) is not None:
+            _write_update_trace(f"use release: {tag_name}")
             return release
+        _write_update_trace(f"skip non-{RELEASE_TAG_PREFIX} release: {tag_name}")
     return None
 
 
@@ -214,10 +246,37 @@ def _fetch_json(url: str) -> object:
 
 
 def _download_file(url: str, destination: Path) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "siren6_helper"})
+    _write_update_trace(f"download start: {url}")
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/octet-stream",
+            "User-Agent": "siren6_helper",
+        },
+    )
     with urllib.request.urlopen(request, timeout=60) as response:
+        response_url = response.geturl()
+        content_type = response.headers.get("content-type", "")
+        expected_size = _parse_content_length(response.headers.get("content-length"))
+        _write_update_trace(
+            f"download response: url={response_url}, content_type={content_type}, expected_size={expected_size}"
+        )
         with destination.open("wb") as file:
-            shutil.copyfileobj(response, file)
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                file.write(chunk)
+
+    actual_size = destination.stat().st_size
+    _write_update_trace(f"download finished: path={destination}, actual_size={actual_size}")
+    if expected_size is not None and actual_size != expected_size:
+        raise RuntimeError(f"ダウンロードサイズが一致しません: expected={expected_size}, actual={actual_size}")
+
+    with destination.open("rb") as file:
+        head = file.read(8)
+    if not head.startswith(b"PK"):
+        raise RuntimeError(f"ダウンロード結果がzipではありません: head={head!r}, size={actual_size}")
 
 
 def _asset_download_url(release: dict[str, object]) -> str | None:
@@ -229,8 +288,18 @@ def _asset_download_url(release: dict[str, object]) -> str | None:
         if not isinstance(asset, dict):
             continue
         if asset.get("name") == RELEASE_ASSET_NAME:
-            return str(asset.get("browser_download_url") or "")
+            api_url = str(asset.get("url") or "")
+            browser_url = str(asset.get("browser_download_url") or "")
+            _write_update_trace(f"asset found: api_url={api_url}, browser_url={browser_url}")
+            return api_url or browser_url
     return None
+
+
+def _parse_content_length(value: str | None) -> int | None:
+    try:
+        return int(value) if value else None
+    except ValueError:
+        return None
 
 
 def _find_extracted_app_dir(extract_dir: Path) -> Path | None:
@@ -379,6 +448,9 @@ class GitHubUpdater:
 
     def get_latest_version(self):
         # self.ico=self.ico_path('icon.ico')
+        import requests
+        from bs4 import BeautifulSoup
+
         ret = None
         url = f'https://github.com/{self.github_author}/{self.github_repo}/tags'
         r = requests.get(url, timeout=5)
@@ -487,6 +559,8 @@ class GitHubUpdater:
             url (str): ダウンロードURL
             filepath (Path): 保存先パス
         """
+        import requests
+
         self.update_status("最新版をダウンロード中...", 0)
         
         response = requests.get(url, stream=True, timeout=30)
