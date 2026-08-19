@@ -111,15 +111,21 @@ class MainWindowUI(QMainWindow):
 
     def update_obs_status_label(self, is_connected: bool):
         if self.config.capture_mode == CAPTURE_MODE_OBS:
-            status = self.ui.obs.connected if is_connected else self.ui.obs.not_connected
+            status = (
+                self.ui.obs.connected if is_connected else self.ui.obs.not_connected
+            )
             color = "green" if is_connected else "red"
             self.obs_status_label.setText(f"OBS: {status}")
         elif self.config.capture_mode == CAPTURE_MODE_DIRECT:
             color = "green"
-            self.obs_status_label.setText(f"取得: {self.ui.feature.capture_mode_direct}")
+            self.obs_status_label.setText(
+                f"取得: {self.ui.feature.capture_mode_direct}"
+            )
         elif self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
             color = "green"
-            self.obs_status_label.setText(f"取得: {self.ui.feature.capture_mode_fullscreen}")
+            self.obs_status_label.setText(
+                f"取得: {self.ui.feature.capture_mode_fullscreen}"
+            )
         else:
             color = "gray"
             self.obs_status_label.setText(f"取得: {self.ui.feature.capture_mode_none}")
@@ -250,18 +256,24 @@ class MainWindowUI(QMainWindow):
 
         self.dungeon_data_tabs.addTab(item_tab, "アイテム")
         self.dungeon_data_tabs.addTab(monster_tab, "モンスター")
-        self.dungeon_data_tabs.addTab(self.create_item_monster_tab(table_specs), "アイテム+モンスター")
+        self.dungeon_data_tabs.addTab(
+            self.create_item_monster_tab(table_specs), "アイテム+モンスター"
+        )
 
         candidate_tab = QWidget()
         candidate_layout = QVBoxLayout(candidate_tab)
         self.shop_candidate_table = QTableWidget(0, 3)
-        self.shop_candidate_table.setHorizontalHeaderLabels(["未識別名", "種別", "候補"])
+        self.shop_candidate_table.setHorizontalHeaderLabels(
+            ["未識別名", "種別", "候補"]
+        )
         self.shop_candidate_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.shop_candidate_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.shop_candidate_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.shop_candidate_table.setWordWrap(False)
         self.shop_candidate_table.verticalHeader().setVisible(False)
-        self.shop_candidate_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        self.shop_candidate_table.verticalHeader().setSectionResizeMode(
+            QHeaderView.Fixed
+        )
         self.shop_candidate_table.horizontalHeader().setStretchLastSection(True)
         self.shop_candidate_table.setColumnWidth(0, 170)
         self.shop_candidate_table.setColumnWidth(1, 70)
@@ -508,28 +520,40 @@ class MainWindowUI(QMainWindow):
             try:
                 hotkeys = {
                     "f6": self.save_image,
-                    "ctrl+shift+alt+p": lambda: self.global_hotkey_pressed.emit("item_tab_next"),
-                    "ctrl+shift+alt+n": lambda: self.global_hotkey_pressed.emit("item_tab_previous"),
-                    "ctrl+shift+alt+d": lambda: self.global_hotkey_pressed.emit("item_scroll_down"),
-                    "ctrl+shift+alt+u": lambda: self.global_hotkey_pressed.emit("item_scroll_up"),
+                    "ctrl+shift+n": lambda: self.global_hotkey_pressed.emit(
+                        "item_tab_next"
+                    ),
+                    "ctrl+shift+p": lambda: self.global_hotkey_pressed.emit(
+                        "item_tab_previous"
+                    ),
+                    "ctrl+shift+d": lambda: self.global_hotkey_pressed.emit(
+                        "item_scroll_down"
+                    ),
+                    "ctrl+shift+u": lambda: self.global_hotkey_pressed.emit(
+                        "item_scroll_up"
+                    ),
                 }
                 for hotkey, callback in hotkeys.items():
                     keyboard.add_hotkey(hotkey, callback, suppress=False)
-                logger.info("グローバルホットキーを登録しました: " + ", ".join(hotkeys.keys()))
+                logger.info(
+                    "グローバルホットキーを登録しました: " + ", ".join(hotkeys.keys())
+                )
             except Exception as e:
                 logger.error(f"グローバルホットキー登録エラー: {e}")
         else:
-            logger.warning("keyboardライブラリが利用できません。グローバルホットキーは無効です。")
+            logger.warning(
+                "keyboardライブラリが利用できません。グローバルホットキーは無効です。"
+            )
 
     def remove_global_hotkeys(self):
         if KEYBOARD_AVAILABLE:
             try:
                 for hotkey in (
                     "f6",
-                    "ctrl+shift+alt+p",
-                    "ctrl+shift+alt+n",
-                    "ctrl+shift+alt+d",
-                    "ctrl+shift+alt+u",
+                    "ctrl+shift+n",
+                    "ctrl+shift+p",
+                    "ctrl+shift+d",
+                    "ctrl+shift+u",
                 ):
                     keyboard.remove_hotkey(hotkey)
                 logger.info("グローバルホットキーを解除しました")
