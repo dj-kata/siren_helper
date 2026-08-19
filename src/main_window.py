@@ -56,6 +56,7 @@ class MainWindowUI(QMainWindow):
         self.dungeon_data_tabs = None
         self.identify_tabs = None
         self.item_monster_identify_tabs = None
+        self.item_monster_splitter = None
         self.dungeon_combo = None
         self.monster_floor_combo = None
         self.monster_table_wrap_checkbox = None
@@ -327,8 +328,8 @@ class MainWindowUI(QMainWindow):
         tab = QWidget()
         layout = QHBoxLayout(tab)
 
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.setChildrenCollapsible(False)
+        self.item_monster_splitter = QSplitter(Qt.Horizontal)
+        self.item_monster_splitter.setChildrenCollapsible(False)
 
         item_panel = QWidget()
         item_layout = QVBoxLayout(item_panel)
@@ -412,11 +413,12 @@ class MainWindowUI(QMainWindow):
         self.item_monster_monster_table = self.create_monster_table()
         monster_layout.addWidget(self.item_monster_monster_table)
 
-        splitter.addWidget(item_panel)
-        splitter.addWidget(monster_panel)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        layout.addWidget(splitter)
+        self.item_monster_splitter.addWidget(item_panel)
+        self.item_monster_splitter.addWidget(monster_panel)
+        self.item_monster_splitter.setStretchFactor(0, 1)
+        self.item_monster_splitter.setStretchFactor(1, 1)
+        self.item_monster_splitter.setSizes([1, 1])
+        layout.addWidget(self.item_monster_splitter)
         return tab
 
     def create_memo_tab(self):

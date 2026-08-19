@@ -211,6 +211,10 @@ class UserSettings:
             "monster_table_wrap": False,
             "monster_table_icon_only": False,
             "monster_table_icon_size": "small",
+            "selected_dungeon_data_tab": "アイテム",
+            "selected_item_tab": 0,
+            "selected_item_monster_item_tab": 0,
+            "item_monster_splitter_sizes": [],
         }
         for key in ITEM_CATEGORIES:
             ret[key] = [False] * len(getattr(tmp, key))
@@ -537,6 +541,8 @@ class MainWindow(MainWindowUI):
         self.monster_table_icon_size_combo.currentIndexChanged.connect(self.on_monster_table_option_changed)
         for table in self.all_monster_tables():
             table.viewport().installEventFilter(self)
+        self.restore_gui_state()
+        self.connect_gui_state_signals()
         self.update_item_tables()
 
     def load_dungeon_filters(self, include_disabled=False):
@@ -667,6 +673,63 @@ class MainWindow(MainWindowUI):
         ):
             QTimer.singleShot(0, self.update_monster_table)
         return super().eventFilter(watched, event)
+
+    def restore_gui_state(self):
+        tab_label = self.siren_settings.params.get("selected_dungeon_data_tab", "アイテム")
+        tab_index = self.find_dungeon_data_tab(tab_label)
+        if tab_index >= 0:
+            self.dungeon_data_tabs.setCurrentIndex(tab_index)
+
+        self.restore_tab_index(self.identify_tabs, self.siren_settings.params.get("selected_item_tab", 0))
+        self.restore_tab_index(
+            self.item_monster_identify_tabs,
+            self.siren_settings.params.get("selected_item_monster_item_tab", 0),
+        )
+        QTimer.singleShot(0, self.restore_item_monster_splitter_sizes)
+
+    def restore_tab_index(self, tabs, index):
+        if not tabs or tabs.count() <= 0:
+            return
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            index = 0
+        tabs.setCurrentIndex(min(max(index, 0), tabs.count() - 1))
+
+    def restore_item_monster_splitter_sizes(self):
+        splitter = getattr(self, "item_monster_splitter", None)
+        if not splitter:
+            return
+        sizes = self.siren_settings.params.get("item_monster_splitter_sizes", [])
+        if (
+            isinstance(sizes, list)
+            and len(sizes) == 2
+            and all(isinstance(size, int) and size > 0 for size in sizes)
+        ):
+            splitter.setSizes(sizes)
+        else:
+            splitter.setSizes([1, 1])
+
+    def connect_gui_state_signals(self):
+        self.dungeon_data_tabs.currentChanged.connect(lambda _index: self.save_current_selection())
+        self.identify_tabs.currentChanged.connect(lambda _index: self.save_current_selection())
+        self.item_monster_identify_tabs.currentChanged.connect(lambda _index: self.save_current_selection())
+        if self.item_monster_splitter:
+            self.item_monster_splitter.splitterMoved.connect(lambda _pos, _index: self.save_current_selection())
+
+    def save_gui_state_to_params(self):
+        if self.dungeon_data_tabs:
+            self.siren_settings.params["selected_dungeon_data_tab"] = self.dungeon_data_tabs.tabText(
+                self.dungeon_data_tabs.currentIndex()
+            )
+        if self.identify_tabs:
+            self.siren_settings.params["selected_item_tab"] = self.identify_tabs.currentIndex()
+        if self.item_monster_identify_tabs:
+            self.siren_settings.params["selected_item_monster_item_tab"] = self.item_monster_identify_tabs.currentIndex()
+        if self.item_monster_splitter:
+            sizes = self.item_monster_splitter.sizes()
+            if len(sizes) == 2 and all(size > 0 for size in sizes):
+                self.siren_settings.params["item_monster_splitter_sizes"] = sizes
 
     def handle_global_hotkey(self, action):
         if action == "item_tab_next":
@@ -1296,6 +1359,7 @@ class MainWindow(MainWindowUI):
         self.siren_settings.params["monster_table_wrap"] = self.monster_table_wrap_checkbox.isChecked()
         self.siren_settings.params["monster_table_icon_only"] = self.monster_table_icon_only_checkbox.isChecked()
         self.siren_settings.params["monster_table_icon_size"] = self.monster_table_icon_size_combo.currentData()
+        self.save_gui_state_to_params()
         self.siren_settings.save_settings()
 
     def const_memos(self):
@@ -1331,6 +1395,7 @@ class MainWindow(MainWindowUI):
         self.siren_settings.params["monster_table_wrap"] = self.monster_table_wrap_checkbox.isChecked()
         self.siren_settings.params["monster_table_icon_only"] = self.monster_table_icon_only_checkbox.isChecked()
         self.siren_settings.params["monster_table_icon_size"] = self.monster_table_icon_size_combo.currentData()
+        self.save_gui_state_to_params()
         self.siren_settings.save_settings()
 
     def save_image(self):
