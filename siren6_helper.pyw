@@ -677,6 +677,10 @@ class MainWindow(MainWindowUI):
             self.scroll_current_item_table(1)
         elif action == "item_scroll_up":
             self.scroll_current_item_table(-1)
+        elif action == "monster_scroll_down":
+            self.scroll_current_monster_table(1)
+        elif action == "monster_scroll_up":
+            self.scroll_current_monster_table(-1)
 
     def active_item_tabs(self):
         if not self.dungeon_data_tabs:
@@ -715,6 +719,26 @@ class MainWindow(MainWindowUI):
         if not tabs:
             return
         table = tabs.currentWidget()
+        if not table:
+            return
+        scroll_bar = table.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.value() + direction * scroll_bar.pageStep())
+
+    def active_monster_table(self):
+        if not self.dungeon_data_tabs:
+            return None
+
+        if self.is_item_monster_tab_active() and getattr(self, "item_monster_monster_table", None):
+            return self.item_monster_monster_table
+
+        monster_index = self.find_dungeon_data_tab("モンスター")
+        current_label = self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex())
+        if monster_index >= 0 and current_label != "モンスター":
+            self.dungeon_data_tabs.setCurrentIndex(monster_index)
+        return self.monster_table
+
+    def scroll_current_monster_table(self, direction):
+        table = self.active_monster_table()
         if not table:
             return
         scroll_bar = table.verticalScrollBar()

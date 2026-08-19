@@ -532,6 +532,12 @@ class MainWindowUI(QMainWindow):
                     "ctrl+shift+u": lambda: self.global_hotkey_pressed.emit(
                         "item_scroll_up"
                     ),
+                    "ctrl+shift+k": lambda: self.global_hotkey_pressed.emit(
+                        "monster_scroll_up"
+                    ),
+                    "ctrl+shift+j": lambda: self.global_hotkey_pressed.emit(
+                        "monster_scroll_down"
+                    ),
                 }
                 for hotkey, callback in hotkeys.items():
                     keyboard.add_hotkey(hotkey, callback, suppress=False)
@@ -554,6 +560,8 @@ class MainWindowUI(QMainWindow):
                     "ctrl+shift+p",
                     "ctrl+shift+d",
                     "ctrl+shift+u",
+                    "ctrl+shift+k",
+                    "ctrl+shift+j",
                 ):
                     keyboard.remove_hotkey(hotkey)
                 logger.info("グローバルホットキーを解除しました")
