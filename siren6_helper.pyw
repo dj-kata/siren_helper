@@ -248,6 +248,7 @@ class MainWindow(MainWindowUI):
     """メインウィンドウクラス - 制御ロジックを担当"""
 
     capture_processed = Signal(object)
+    global_hotkey_pressed = Signal(str)
 
     def __init__(self):
         self.config = Config()
@@ -328,6 +329,7 @@ class MainWindow(MainWindowUI):
         self.display_timer.timeout.connect(self.update_display)
         self.display_timer.start(500)
 
+        self.global_hotkey_pressed.connect(self.handle_global_hotkey)
         self.setup_global_hotkeys()
         logger.info("アプリケーション起動完了")
 
@@ -643,6 +645,53 @@ class MainWindow(MainWindowUI):
         ):
             QTimer.singleShot(0, self.update_monster_table)
         return super().eventFilter(watched, event)
+
+    def handle_global_hotkey(self, action):
+        if action == "item_tab_next":
+            self.move_item_category_tab(1)
+        elif action == "item_tab_previous":
+            self.move_item_category_tab(-1)
+        elif action == "item_scroll_down":
+            self.scroll_current_item_table(1)
+        elif action == "item_scroll_up":
+            self.scroll_current_item_table(-1)
+
+    def active_item_tabs(self):
+        if not self.dungeon_data_tabs:
+            return None
+
+        current_label = self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex())
+        if current_label == "アイテム+モンスター" and getattr(self, "item_monster_identify_tabs", None):
+            return self.item_monster_identify_tabs
+
+        item_index = self.find_dungeon_data_tab("アイテム")
+        if item_index >= 0 and current_label != "アイテム":
+            self.dungeon_data_tabs.setCurrentIndex(item_index)
+        return self.identify_tabs
+
+    def find_dungeon_data_tab(self, label):
+        if not self.dungeon_data_tabs:
+            return -1
+        for index in range(self.dungeon_data_tabs.count()):
+            if self.dungeon_data_tabs.tabText(index) == label:
+                return index
+        return -1
+
+    def move_item_category_tab(self, delta):
+        tabs = self.active_item_tabs()
+        if not tabs or tabs.count() <= 0:
+            return
+        tabs.setCurrentIndex((tabs.currentIndex() + delta) % tabs.count())
+
+    def scroll_current_item_table(self, direction):
+        tabs = self.active_item_tabs()
+        if not tabs:
+            return
+        table = tabs.currentWidget()
+        if not table:
+            return
+        scroll_bar = table.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.value() + direction * scroll_bar.pageStep())
 
     def current_dungeon(self):
         for dungeon in self.dungeons:

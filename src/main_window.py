@@ -429,8 +429,16 @@ class MainWindowUI(QMainWindow):
     def setup_global_hotkeys(self):
         if KEYBOARD_AVAILABLE:
             try:
-                keyboard.add_hotkey("f6", self.save_image, suppress=False)
-                logger.info("グローバルホットキー (F6) を登録しました")
+                hotkeys = {
+                    "f6": self.save_image,
+                    "ctrl+shift+alt+p": lambda: self.global_hotkey_pressed.emit("item_tab_next"),
+                    "ctrl+shift+alt+n": lambda: self.global_hotkey_pressed.emit("item_tab_previous"),
+                    "ctrl+shift+alt+d": lambda: self.global_hotkey_pressed.emit("item_scroll_down"),
+                    "ctrl+shift+alt+u": lambda: self.global_hotkey_pressed.emit("item_scroll_up"),
+                }
+                for hotkey, callback in hotkeys.items():
+                    keyboard.add_hotkey(hotkey, callback, suppress=False)
+                logger.info("グローバルホットキーを登録しました: " + ", ".join(hotkeys.keys()))
             except Exception as e:
                 logger.error(f"グローバルホットキー登録エラー: {e}")
         else:
@@ -439,8 +447,15 @@ class MainWindowUI(QMainWindow):
     def remove_global_hotkeys(self):
         if KEYBOARD_AVAILABLE:
             try:
-                keyboard.remove_hotkey("f6")
-                logger.info("グローバルホットキー (F6) を解除しました")
+                for hotkey in (
+                    "f6",
+                    "ctrl+shift+alt+p",
+                    "ctrl+shift+alt+n",
+                    "ctrl+shift+alt+d",
+                    "ctrl+shift+alt+u",
+                ):
+                    keyboard.remove_hotkey(hotkey)
+                logger.info("グローバルホットキーを解除しました")
             except Exception as e:
                 logger.error(f"グローバルホットキー解除エラー: {e}")
 
