@@ -5,7 +5,7 @@ OBSから取得したゲーム画面を監視するための最小構成。
 
 import base64
 
-from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QAction, QActionGroup, QIntValidator
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QRadioButton,
+    QSplitter,
     QTabWidget,
     QTableWidget,
     QVBoxLayout,
@@ -54,14 +55,17 @@ class MainWindowUI(QMainWindow):
         self.top_tabs = None
         self.dungeon_data_tabs = None
         self.identify_tabs = None
+        self.item_monster_identify_tabs = None
         self.dungeon_combo = None
         self.monster_floor_combo = None
         self.monster_table_wrap_checkbox = None
         self.monster_table_icon_only_checkbox = None
         self.monster_table_icon_size_combo = None
         self.monster_table = None
+        self.item_monster_monster_table = None
         self.shop_candidate_table = None
         self.item_tables = {}
+        self.item_monster_item_tables = {}
         self.item_count_labels = {}
         self.mark_identified_button = None
         self.mark_unknown_button = None
@@ -155,27 +159,7 @@ class MainWindowUI(QMainWindow):
             ("tate", "盾(Lv1)"),
         ]
         for key, label in table_specs:
-            headers = self.itemlist.get_table_headers(key)
-            table = QTableWidget(0, len(headers))
-            table.setHorizontalHeaderLabels(headers)
-            table.setSelectionBehavior(QAbstractItemView.SelectRows)
-            table.setSelectionMode(QAbstractItemView.ExtendedSelection)
-            table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-            table.setWordWrap(False)
-            table.verticalHeader().setVisible(False)
-            table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-            table.horizontalHeader().setStretchLastSection(True)
-            table.setAlternatingRowColors(False)
-            table.setSortingEnabled(False)
-            for column, header in enumerate(headers):
-                width = 220 if header == "簡単な説明" else 90
-                if header == "名前":
-                    width = 170
-                elif header in ("異種", "異種合成"):
-                    width = 270
-                elif header in ("+1", "下限", "上限", "Lv", "基礎値", "印数"):
-                    width = 60
-                table.setColumnWidth(column, width)
+            table = self.create_item_table(key)
             self.item_tables[key] = table
             self.identify_tabs.addTab(table, label)
 
@@ -250,22 +234,12 @@ class MainWindowUI(QMainWindow):
         monster_tab = QWidget()
         monster_layout = QVBoxLayout(monster_tab)
 
-        self.monster_table = QTableWidget(0, 4)
-        self.monster_table.setHorizontalHeaderLabels(["階", "出現モンスター", "デッ怪", "マゼ種"])
-        self.monster_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.monster_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.monster_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.monster_table.setWordWrap(False)
-        self.monster_table.verticalHeader().setVisible(False)
-        self.monster_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-        self.monster_table.horizontalHeader().setStretchLastSection(True)
-        self.monster_table.setColumnWidth(0, 60)
-        self.monster_table.setColumnWidth(1, 520)
-        self.monster_table.setColumnWidth(2, 180)
+        self.monster_table = self.create_monster_table()
         monster_layout.addWidget(self.monster_table)
 
         self.dungeon_data_tabs.addTab(item_tab, "アイテム")
         self.dungeon_data_tabs.addTab(monster_tab, "モンスター")
+        self.dungeon_data_tabs.addTab(self.create_item_monster_tab(table_specs), "アイテム+モンスター")
 
         candidate_tab = QWidget()
         candidate_layout = QVBoxLayout(candidate_tab)
@@ -285,6 +259,75 @@ class MainWindowUI(QMainWindow):
         self.dungeon_data_tabs.addTab(self.create_memo_tab(), "メモ")
         layout.addWidget(self.dungeon_data_tabs)
 
+        return tab
+
+    def create_item_table(self, key):
+        headers = self.itemlist.get_table_headers(key)
+        table = QTableWidget(0, len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setWordWrap(False)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setAlternatingRowColors(False)
+        table.setSortingEnabled(False)
+        for column, header in enumerate(headers):
+            width = 220 if header == "簡単な説明" else 90
+            if header == "名前":
+                width = 170
+            elif header in ("異種", "異種合成"):
+                width = 270
+            elif header in ("+1", "下限", "上限", "Lv", "基礎値", "印数"):
+                width = 60
+            table.setColumnWidth(column, width)
+        return table
+
+    def create_monster_table(self):
+        table = QTableWidget(0, 4)
+        table.setHorizontalHeaderLabels(["階", "出現モンスター", "デッ怪", "マゼ種"])
+        table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        table.setSelectionMode(QAbstractItemView.SingleSelection)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        table.setWordWrap(False)
+        table.verticalHeader().setVisible(False)
+        table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setColumnWidth(0, 60)
+        table.setColumnWidth(1, 520)
+        table.setColumnWidth(2, 180)
+        return table
+
+    def create_item_monster_tab(self, table_specs):
+        tab = QWidget()
+        layout = QHBoxLayout(tab)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
+
+        item_panel = QWidget()
+        item_layout = QVBoxLayout(item_panel)
+        item_layout.setContentsMargins(0, 0, 6, 0)
+        self.item_monster_identify_tabs = QTabWidget()
+        for key, label in table_specs:
+            table = self.create_item_table(key)
+            self.item_monster_item_tables[key] = table
+            self.item_monster_identify_tabs.addTab(table, label)
+        item_layout.addWidget(self.item_monster_identify_tabs)
+
+        monster_panel = QWidget()
+        monster_layout = QVBoxLayout(monster_panel)
+        monster_layout.setContentsMargins(6, 0, 0, 0)
+        self.item_monster_monster_table = self.create_monster_table()
+        monster_layout.addWidget(self.item_monster_monster_table)
+
+        splitter.addWidget(item_panel)
+        splitter.addWidget(monster_panel)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 1)
+        layout.addWidget(splitter)
         return tab
 
     def create_memo_tab(self):

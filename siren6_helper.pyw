@@ -488,7 +488,7 @@ class MainWindow(MainWindowUI):
         self.memo_edit.setPlainText(self.siren_settings.params.get("memo", ""))
         self.load_current_const_memo()
         self.init_dungeon_combo()
-        for category, table in self.item_tables.items():
+        for category, table in self.all_item_tables():
             table.cellDoubleClicked.connect(
                 lambda row, _column, category=category: self.toggle_item_identification(category, row)
             )
@@ -511,7 +511,8 @@ class MainWindow(MainWindowUI):
         self.monster_table_wrap_checkbox.toggled.connect(self.on_monster_table_option_changed)
         self.monster_table_icon_only_checkbox.toggled.connect(self.on_monster_table_option_changed)
         self.monster_table_icon_size_combo.currentIndexChanged.connect(self.on_monster_table_option_changed)
-        self.monster_table.viewport().installEventFilter(self)
+        for table in self.all_monster_tables():
+            table.viewport().installEventFilter(self)
         self.update_item_tables()
 
     def load_dungeon_filters(self, include_disabled=False):
@@ -613,9 +614,29 @@ class MainWindow(MainWindowUI):
         self.update_monster_table()
         self.save_current_selection()
 
+    def all_monster_tables(self):
+        return [
+            table
+            for table in (self.monster_table, getattr(self, "item_monster_monster_table", None))
+            if table is not None
+        ]
+
+    def all_item_table_sets(self):
+        tables = [self.item_tables]
+        item_monster_tables = getattr(self, "item_monster_item_tables", None)
+        if item_monster_tables:
+            tables.append(item_monster_tables)
+        return tables
+
+    def all_item_tables(self):
+        tables = []
+        for table_set in self.all_item_table_sets():
+            tables.extend(table_set.items())
+        return tables
+
     def eventFilter(self, watched, event):
         if (
-            watched is self.monster_table.viewport()
+            watched in [table.viewport() for table in self.all_monster_tables()]
             and event.type() == QEvent.Resize
             and self.monster_table_wrap_checkbox.isChecked()
             and not self.monster_table_updating
@@ -666,7 +687,8 @@ class MainWindow(MainWindowUI):
         self.monster_floor_combo.blockSignals(False)
 
     def update_monster_table(self, *_args):
-        if not self.monster_table:
+        monster_tables = self.all_monster_tables()
+        if not monster_tables:
             return
         if self.monster_table_updating:
             return
@@ -683,21 +705,23 @@ class MainWindow(MainWindowUI):
         ]
 
         self.monster_table_updating = True
-        self.monster_table.setUpdatesEnabled(False)
-        self.monster_table.clearSpans()
         try:
-            if self.monster_table_wrap_checkbox.isChecked():
-                self.update_wrapped_monster_table(target)
-            else:
-                self.update_flat_monster_table(target)
+            for table in monster_tables:
+                table.setUpdatesEnabled(False)
+                table.clearSpans()
+                if self.monster_table_wrap_checkbox.isChecked():
+                    self.update_wrapped_monster_table(table, target)
+                else:
+                    self.update_flat_monster_table(table, target)
         finally:
-            self.monster_table.setUpdatesEnabled(True)
+            for table in monster_tables:
+                table.setUpdatesEnabled(True)
             self.monster_table_updating = False
 
         self.broadcast_monster_floor_state()
 
-    def update_flat_monster_table(self, target):
-        self.monster_table.setRowCount(len(target))
+    def update_flat_monster_table(self, table, target):
+        table.setRowCount(len(target))
         monster_slots = max((len(floor.get("monster_cells") or floor.get("monsters", [])) for floor in target), default=0)
         dekkai_slots = max((len(floor.get("dekkai_cells") or floor.get("dekkai_monsters", [])) for floor in target), default=0)
         maze_slots = max((len(floor.get("maze_cells") or floor.get("maze_monsters", [])) for floor in target), default=0)
@@ -707,41 +731,41 @@ class MainWindow(MainWindowUI):
             + [f"デッ怪{i}" for i in range(1, dekkai_slots + 1)]
             + [f"マゼ種{i}" for i in range(1, maze_slots + 1)]
         )
-        self.monster_table.setColumnCount(len(headers))
-        self.monster_table.setHorizontalHeaderLabels(headers)
-        self.monster_table.horizontalHeader().setStretchLastSection(True)
-        self.monster_table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
-        self.monster_table.setIconSize(self.monster_table_icon_size())
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setStretchLastSection(True)
+        table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
+        table.setIconSize(self.monster_table_icon_size())
         monster_column_width = self.monster_table_column_width()
         for column in range(1, len(headers)):
-            self.monster_table.setColumnWidth(column, monster_column_width)
+            table.setColumnWidth(column, monster_column_width)
 
-        row_height = self.monster_table_row_height()
-        self.monster_table.verticalHeader().setDefaultSectionSize(row_height)
+        row_height = self.monster_table_row_height(table)
+        table.verticalHeader().setDefaultSectionSize(row_height)
 
         for row, floor in enumerate(target):
-            self.set_monster_table_item(row, 0, self.format_floor_label(floor.get("floor", "")))
+            self.set_monster_table_item(table, row, 0, self.format_floor_label(floor.get("floor", "")))
 
             column = 1
-            column = self.fill_monster_cells(row, column, monster_slots, floor, "monster_cells", "monsters")
-            column = self.fill_monster_cells(row, column, dekkai_slots, floor, "dekkai_cells", "dekkai_monsters")
-            self.fill_monster_cells(row, column, maze_slots, floor, "maze_cells", "maze_monsters")
-            self.monster_table.setRowHeight(row, row_height)
+            column = self.fill_monster_cells(table, row, column, monster_slots, floor, "monster_cells", "monsters")
+            column = self.fill_monster_cells(table, row, column, dekkai_slots, floor, "dekkai_cells", "dekkai_monsters")
+            self.fill_monster_cells(table, row, column, maze_slots, floor, "maze_cells", "maze_monsters")
+            table.setRowHeight(row, row_height)
 
-    def update_wrapped_monster_table(self, target):
-        cell_column_count = self.wrapped_monster_cell_column_count()
+    def update_wrapped_monster_table(self, table, target):
+        cell_column_count = self.wrapped_monster_cell_column_count(table)
         headers = ["階"] + [f"M{i}" for i in range(1, cell_column_count + 1)]
-        self.monster_table.setColumnCount(len(headers))
-        self.monster_table.setHorizontalHeaderLabels(headers)
-        self.monster_table.horizontalHeader().setStretchLastSection(False)
-        self.monster_table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
-        self.monster_table.setIconSize(self.monster_table_icon_size())
+        table.setColumnCount(len(headers))
+        table.setHorizontalHeaderLabels(headers)
+        table.horizontalHeader().setStretchLastSection(False)
+        table.setColumnWidth(0, MONSTER_TABLE_FLOOR_COLUMN_WIDTH)
+        table.setIconSize(self.monster_table_icon_size())
         monster_column_width = self.monster_table_column_width()
         for column in range(1, len(headers)):
-            self.monster_table.setColumnWidth(column, monster_column_width)
+            table.setColumnWidth(column, monster_column_width)
 
-        row_height = self.monster_table_row_height()
-        self.monster_table.verticalHeader().setDefaultSectionSize(row_height)
+        row_height = self.monster_table_row_height(table)
+        table.verticalHeader().setDefaultSectionSize(row_height)
         row = 0
         floor_rows = []
         for floor in target:
@@ -750,21 +774,22 @@ class MainWindow(MainWindowUI):
             floor_rows.append((floor, cells, row, visual_row_count))
             row += visual_row_count
 
-        self.monster_table.setRowCount(row)
+        table.setRowCount(row)
         for floor, cells, start_row, visual_row_count in floor_rows:
-            self.set_monster_table_item(start_row, 0, self.format_floor_label(floor.get("floor", "")))
+            self.set_monster_table_item(table, start_row, 0, self.format_floor_label(floor.get("floor", "")))
             if visual_row_count > 1:
-                self.monster_table.setSpan(start_row, 0, visual_row_count, 1)
+                table.setSpan(start_row, 0, visual_row_count, 1)
 
             for visual_row in range(visual_row_count):
                 table_row = start_row + visual_row
-                self.monster_table.setRowHeight(table_row, row_height)
+                table.setRowHeight(table_row, row_height)
                 for column_offset in range(cell_column_count):
                     cell_index = visual_row * cell_column_count + column_offset
                     table_column = column_offset + 1
                     if cell_index < len(cells):
                         cell = cells[cell_index]
                         self.set_monster_table_item(
+                            table,
                             table_row,
                             table_column,
                             self.monster_table_cell_text(cell),
@@ -774,7 +799,7 @@ class MainWindow(MainWindowUI):
                             cell.get("group", ""),
                         )
                     else:
-                        self.set_monster_table_item(table_row, table_column, "")
+                        self.set_monster_table_item(table, table_row, table_column, "")
 
     def monster_table_column_width(self):
         icon_size = self.monster_table_icon_size().width()
@@ -782,16 +807,16 @@ class MainWindow(MainWindowUI):
             return max(MONSTER_TABLE_ICON_COLUMN_WIDTH, icon_size + 24)
         return max(MONSTER_TABLE_TEXT_COLUMN_WIDTH, icon_size + 118)
 
-    def monster_table_row_height(self):
-        return max(self.monster_table.fontMetrics().height() + 8, self.monster_table_icon_size().height() + 8)
+    def monster_table_row_height(self, table):
+        return max(table.fontMetrics().height() + 8, self.monster_table_icon_size().height() + 8)
 
     def monster_table_icon_size(self):
         size_key = self.monster_table_icon_size_combo.currentData()
         icon_size = MONSTER_TABLE_ICON_SIZES.get(size_key, MONSTER_TABLE_ICON_SIZES["small"])
         return QSize(icon_size, icon_size)
 
-    def wrapped_monster_cell_column_count(self):
-        available_width = max(1, self.monster_table.viewport().width() - MONSTER_TABLE_FLOOR_COLUMN_WIDTH - 4)
+    def wrapped_monster_cell_column_count(self, table):
+        available_width = max(1, table.viewport().width() - MONSTER_TABLE_FLOOR_COLUMN_WIDTH - 4)
         return max(1, available_width // self.monster_table_column_width())
 
     def monster_floor_table_cells(self, floor):
@@ -958,7 +983,7 @@ class MainWindow(MainWindowUI):
     def format_floor_label(self, floor):
         return f"{floor}F" if isinstance(floor, int) else str(floor)
 
-    def fill_monster_cells(self, row, start_column, slot_count, floor, cell_key, names_key):
+    def fill_monster_cells(self, table, row, start_column, slot_count, floor, cell_key, names_key):
         cells = self.get_monster_cells(floor, cell_key, names_key)
         group = {
             "monster_cells": "normal",
@@ -970,6 +995,7 @@ class MainWindow(MainWindowUI):
                 cell = dict(cells[offset])
                 cell["group"] = group
                 self.set_monster_table_item(
+                    table,
                     row,
                     start_column + offset,
                     self.monster_table_cell_text(cell),
@@ -979,7 +1005,7 @@ class MainWindow(MainWindowUI):
                     group,
                 )
             else:
-                self.set_monster_table_item(row, start_column + offset, "")
+                self.set_monster_table_item(table, row, start_column + offset, "")
         return start_column + slot_count
 
     def monster_table_cell_text(self, cell):
@@ -998,7 +1024,7 @@ class MainWindow(MainWindowUI):
                     return path
         return None
 
-    def set_monster_table_item(self, row, column, value, background="", foreground="", monster_name="", group=""):
+    def set_monster_table_item(self, table, row, column, value, background="", foreground="", monster_name="", group=""):
         cell = QTableWidgetItem(str(value))
         background_color = QColor(background)
         if background and background_color.isValid():
@@ -1013,7 +1039,7 @@ class MainWindow(MainWindowUI):
                 cell.setToolTip(monster_name)
         if monster_name and self.monster_table_icon_only_checkbox.isChecked():
             cell.setToolTip(monster_name)
-        self.monster_table.setItem(row, column, cell)
+        table.setItem(row, column, cell)
 
     def set_selected_items_identified(self, identified: bool):
         category = ITEM_CATEGORIES[self.identify_tabs.currentIndex()]
@@ -1098,11 +1124,12 @@ class MainWindow(MainWindowUI):
         self.update_shop_candidate_history_table()
 
     def update_item_table(self, category):
-        table = self.item_tables[category]
         target = self.get_target_items(category)
-        table.setRowCount(len(target))
-        row_height = table.fontMetrics().height() + 6
-        table.verticalHeader().setDefaultSectionSize(row_height)
+        tables = [table_set[category] for table_set in self.all_item_table_sets() if category in table_set]
+        for table in tables:
+            table.setRowCount(len(target))
+            row_height = table.fontMetrics().height() + 6
+            table.verticalHeader().setDefaultSectionSize(row_height)
 
         previous_buy = target[0].buy if target else None
         is_odd_price_group = False
@@ -1120,12 +1147,13 @@ class MainWindow(MainWindowUI):
                 background = QColor("#666666")
             foreground = QColor("#888888" if item.demerit else "#000000")
 
-            for column, value in enumerate(values):
-                cell = QTableWidgetItem(str(value))
-                cell.setBackground(QBrush(background))
-                cell.setForeground(QBrush(foreground))
-                table.setItem(row, column, cell)
-            table.setRowHeight(row, row_height)
+            for table in tables:
+                for column, value in enumerate(values):
+                    cell = QTableWidgetItem(str(value))
+                    cell.setBackground(QBrush(background))
+                    cell.setForeground(QBrush(foreground))
+                    table.setItem(row, column, cell)
+                table.setRowHeight(row, table.fontMetrics().height() + 6)
 
     def to_single_line(self, value):
         return " ".join(str(value).replace("\r", " ").replace("\n", " ").split())
