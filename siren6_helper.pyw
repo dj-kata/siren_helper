@@ -81,7 +81,11 @@ from src.config_dialog import ConfigDialog
 startup_trace("imported src.config_dialog")
 from src.direct_capture import capture_shiren_window
 startup_trace("imported src.direct_capture")
-from src.fullscreen_capture import capture_shiren_fullscreen
+from src.fullscreen_capture import (
+    FullscreenCaptureError,
+    capture_shiren_dxgi,
+    capture_shiren_fullscreen,
+)
 startup_trace("imported src.fullscreen_capture")
 from src.http_server import BrowserHTTPServer
 startup_trace("imported src.http_server")
@@ -2062,6 +2066,10 @@ class MainWindow(MainWindowUI):
             self.obs_manager.screenshot()
             return self.obs_manager.screen
         if self.config.capture_mode == CAPTURE_MODE_DIRECT:
+            try:
+                return capture_shiren_dxgi(OCR_CAPTURE_SIZE)
+            except FullscreenCaptureError:
+                logger.debug("DXGI直接取得に失敗したため従来方式にフォールバックします", exc_info=True)
             return capture_shiren_window(OCR_CAPTURE_SIZE)
         if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
             return capture_shiren_fullscreen(OCR_CAPTURE_SIZE)

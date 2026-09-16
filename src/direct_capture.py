@@ -78,14 +78,23 @@ def get_shiren_window_bbox():
     if sys.platform != "win32":
         raise DirectCaptureError("直接取得はWindows上でのみ利用できます")
 
-    hwnd = _get_target_hwnd()
-    if not hwnd:
-        raise DirectCaptureError("Steam版シレン6の表示中ウィンドウが見つかりません")
-
+    hwnd = get_shiren_window_hwnd()
     bbox = _client_bbox(hwnd)
     if not bbox:
         raise DirectCaptureError("ゲームウィンドウの取得範囲を特定できません")
     return bbox
+
+
+def get_shiren_window_hwnd():
+    """Steam版シレン6の表示中ウィンドウハンドルを返す。"""
+    if sys.platform != "win32":
+        raise DirectCaptureError("直接取得はWindows上でのみ利用できます")
+
+    hwnd = _get_target_hwnd()
+    if not hwnd:
+        raise DirectCaptureError("Steam版シレン6の表示中ウィンドウが見つかりません")
+
+    return hwnd
 
 
 def _get_target_hwnd():

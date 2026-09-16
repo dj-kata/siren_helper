@@ -7,6 +7,7 @@ srcs=$(wildcard *.py) $(wildcard *.pyw) $(wildcard src/*.py) $(wildcard misc/*.p
 html_files=$(wildcard template/*.html)
 version=$(shell head -n1 version.txt)
 ZIP ?= 7z a -tzip -mx=1 -mmt=on
+ZIP_EXCLUDES = -xr!.venv
 
 top: $(target_zip)
 all: $(target_zip)
@@ -15,7 +16,8 @@ $(target_zip): $(target)
 	@rm -rf $(target_zip)
 	@rm -rf $(project_name)/log
 	@rm -rf $(project_name)/*.json
-	$(ZIP) $(target_zip) $(project_name)
+	@find $(project_name) -type d -name .venv -prune -exec rm -rf {} +
+	$(ZIP) $(target_zip) $(project_name) $(ZIP_EXCLUDES)
 
 $(target): $(srcs) $(html_files) $(project_name).pyw version.txt
 	@$(wuv) run setup.py build
