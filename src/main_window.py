@@ -40,8 +40,13 @@ except ImportError:
 
 from src.funcs import load_ui_text
 from src.logger import get_logger
-from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_FULLSCREEN, CAPTURE_MODE_OBS
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_OBS
 from src.byoyon_wall import GRID_SIZE
+from src.item import (
+    DUNGEON_ITEM_FLAG_CATEGORIES,
+    dungeon_item_flag_headers,
+    dungeon_item_flag_insert_index,
+)
 from src.network_info import get_http_viewer_url
 
 logger = get_logger(__name__)
@@ -138,11 +143,6 @@ class MainWindowUI(QMainWindow):
             color = "green"
             self.obs_status_label.setText(
                 f"取得: {self.ui.feature.capture_mode_direct}"
-            )
-        elif self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
-            color = "green"
-            self.obs_status_label.setText(
-                f"取得: {self.ui.feature.capture_mode_fullscreen}"
             )
         else:
             color = "gray"
@@ -378,6 +378,9 @@ class MainWindowUI(QMainWindow):
 
     def create_item_table(self, key):
         headers = self.itemlist.get_table_headers(key)
+        if key in DUNGEON_ITEM_FLAG_CATEGORIES:
+            index = dungeon_item_flag_insert_index(headers)
+            headers = headers[:index] + dungeon_item_flag_headers(key) + headers[index:]
         table = QTableWidget(0, len(headers))
         table.setHorizontalHeaderLabels(headers)
         table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -397,6 +400,8 @@ class MainWindowUI(QMainWindow):
                 width = 270
             elif header in ("+1", "下限", "上限", "Lv", "基礎値", "印数"):
                 width = 60
+            elif header in dungeon_item_flag_headers(key):
+                width = 90
             table.setColumnWidth(column, width)
         return table
 

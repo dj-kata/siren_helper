@@ -27,7 +27,6 @@ from PySide6.QtWidgets import (
 
 from src.config import (
     CAPTURE_MODE_DIRECT,
-    CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
     Config,
@@ -118,10 +117,6 @@ class ConfigDialog(QDialog):
         self.capture_mode_combo.addItem(self.ui.feature.capture_mode_none, CAPTURE_MODE_NONE)
         self.capture_mode_combo.addItem(self.ui.feature.capture_mode_obs, CAPTURE_MODE_OBS)
         self.capture_mode_combo.addItem(self.ui.feature.capture_mode_direct, CAPTURE_MODE_DIRECT)
-        self.capture_mode_combo.addItem(
-            self.ui.feature.capture_mode_fullscreen,
-            CAPTURE_MODE_FULLSCREEN,
-        )
         dosukoi_form.addRow(self.ui.feature.capture_mode, self.capture_mode_combo)
 
         self.obs_capture_interval_spin = QDoubleSpinBox()

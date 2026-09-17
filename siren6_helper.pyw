@@ -69,7 +69,6 @@ startup_trace("imported keyboard")
 
 from src.config import (
     CAPTURE_MODE_DIRECT,
-    CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
@@ -84,7 +83,6 @@ startup_trace("imported src.direct_capture")
 from src.fullscreen_capture import (
     FullscreenCaptureError,
     capture_shiren_dxgi,
-    capture_shiren_fullscreen,
 )
 startup_trace("imported src.fullscreen_capture")
 from src.http_server import BrowserHTTPServer
@@ -94,7 +92,12 @@ from src.dungeon_ocr import normalize_ocr_text
 startup_trace("imported src.dungeon_ocr")
 from src.funcs import escape_for_filename
 startup_trace("imported src.funcs")
-from src.item import ItemList
+from src.item import (
+    DUNGEON_ITEM_FLAG_CATEGORIES,
+    ItemList,
+    dungeon_item_flag_headers,
+    dungeon_item_flag_insert_index,
+)
 startup_trace("imported src.item")
 from src.define import live_exploration_mode_has_status, live_exploration_mode_label
 from src.byoyon_wall import GRID_SIZE, find_byoyon_candidates
@@ -547,16 +550,13 @@ class MainWindow(MainWindowUI):
                     "buy": item.buy,
                     "sell": item.sell,
                     "price_group_odd": is_odd_price_group,
-                    "values": [
-                        self.to_single_line(value)
-                        for value in self.itemlist.get_table_values(category, item)
-                    ],
+                    "values": self.get_item_table_values(category, item),
                 })
             identified, total = counts.get(category, (0, 0))
             categories.append({
                 "key": category,
                 "label": ITEM_CATEGORY_LABELS.get(category, category),
-                "headers": self.itemlist.get_table_headers(category),
+                "headers": self.get_item_table_headers(category),
                 "identified": identified,
                 "total": total,
                 "items": items,
@@ -841,17 +841,20 @@ class MainWindow(MainWindowUI):
                 continue
 
             item_names_by_category = {category: set() for category in ITEM_CATEGORIES}
+            item_info_by_category = {category: {} for category in ITEM_CATEGORIES}
             for item in data.get("items", {}).get("items", []):
                 category = reverse_categories.get(item.get("category", ""))
                 name = item.get("name", "")
                 if category and name:
                     item_names_by_category[category].add(name)
+                    item_info_by_category[category][name] = item
 
             dungeons.append({
                 "key": key,
                 "name": data.get("name") or path.stem,
                 "path": str(path),
                 "item_names_by_category": item_names_by_category,
+                "item_info_by_category": item_info_by_category,
                 "monster_floors": data.get("monster_table", {}).get("floors", []),
             })
 
@@ -1116,6 +1119,38 @@ class MainWindow(MainWindowUI):
             return items
         item_names = dungeon["item_names_by_category"].get(category, set())
         return [item for item in items if item.name in item_names]
+
+    def get_dungeon_item_info(self, category, item):
+        dungeon = self.current_dungeon()
+        if not dungeon:
+            return {}
+        return dungeon.get("item_info_by_category", {}).get(category, {}).get(item.name, {})
+
+    def get_item_table_headers(self, category):
+        headers = self.itemlist.get_table_headers(category)
+        if category in DUNGEON_ITEM_FLAG_CATEGORIES:
+            index = dungeon_item_flag_insert_index(headers)
+            return headers[:index] + dungeon_item_flag_headers(category) + headers[index:]
+        return headers
+
+    def get_item_table_values(self, category, item):
+        values = [
+            self.to_single_line(value)
+            for value in self.itemlist.get_table_values(category, item)
+        ]
+        if category not in DUNGEON_ITEM_FLAG_CATEGORIES:
+            return values
+        item_info = self.get_dungeon_item_info(category, item)
+        flag_values_by_header = {
+            "店売限定": "○" if item_info.get("shop_only") else "",
+            "デッ怪報酬": "○" if item_info.get("dekkai_reward") else "",
+        }
+        flag_values = [
+            flag_values_by_header.get(header, "")
+            for header in dungeon_item_flag_headers(category)
+        ]
+        index = dungeon_item_flag_insert_index(self.itemlist.get_table_headers(category))
+        return values[:index] + flag_values + values[index:]
 
     def get_all_items(self, category):
         return getattr(self.itemlist, category)
@@ -1828,7 +1863,11 @@ class MainWindow(MainWindowUI):
     def update_item_table(self, category):
         target = self.get_target_items(category)
         tables = [table_set[category] for table_set in self.all_item_table_sets() if category in table_set]
+        headers = self.get_item_table_headers(category)
         for table in tables:
+            if table.columnCount() != len(headers):
+                table.setColumnCount(len(headers))
+                table.setHorizontalHeaderLabels(headers)
             table.setRowCount(len(target))
             row_height = table.fontMetrics().height() + 6
             table.verticalHeader().setDefaultSectionSize(row_height)
@@ -1837,8 +1876,7 @@ class MainWindow(MainWindowUI):
         is_odd_price_group = False
 
         for row, item in enumerate(target):
-            values = self.itemlist.get_table_values(category, item)
-            values = [self.to_single_line(value) for value in values]
+            values = self.get_item_table_values(category, item)
 
             if item.buy != previous_buy:
                 previous_buy = item.buy
@@ -1965,7 +2003,6 @@ class MainWindow(MainWindowUI):
             if self.config.capture_mode not in (
                 CAPTURE_MODE_OBS,
                 CAPTURE_MODE_DIRECT,
-                CAPTURE_MODE_FULLSCREEN,
             ):
                 self.capture_status = self.ui.main.waiting_capture
                 return
@@ -2071,8 +2108,6 @@ class MainWindow(MainWindowUI):
             except FullscreenCaptureError:
                 logger.debug("DXGI直接取得に失敗したため従来方式にフォールバックします", exc_info=True)
             return capture_shiren_window(OCR_CAPTURE_SIZE)
-        if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
-            return capture_shiren_fullscreen(OCR_CAPTURE_SIZE)
         return None
 
     def on_capture_processed(self, result):

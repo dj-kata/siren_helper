@@ -81,6 +81,25 @@ DEFAULT_IDENTIFIED_ITEM_NAMES = {
     "ぬれた巻物",
 }
 
+DUNGEON_ITEM_FLAG_CATEGORIES = {"kusa", "makimono", "tubo", "udewa"}
+DUNGEON_ITEM_FLAG_HEADERS = ["店売限定", "デッ怪報酬"]
+DUNGEON_ITEM_FLAG_INSERT_BEFORE_HEADERS = {"印", "異種", "異種合成", "簡単な説明"}
+
+
+def dungeon_item_flag_headers(category):
+    if category == "udewa":
+        return ["店売限定"]
+    if category in DUNGEON_ITEM_FLAG_CATEGORIES:
+        return DUNGEON_ITEM_FLAG_HEADERS
+    return []
+
+
+def dungeon_item_flag_insert_index(headers):
+    for index, header in enumerate(headers):
+        if header in DUNGEON_ITEM_FLAG_INSERT_BEFORE_HEADERS:
+            return index
+    return len(headers)
+
 
 class ItemList:
     data_path = (

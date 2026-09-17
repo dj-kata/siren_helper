@@ -82,7 +82,7 @@ class UIText:
         capture_mode = 'Game screen capture:'
         capture_mode_none = 'No auto capture'
         capture_mode_obs = 'Via OBS'
-        capture_mode_direct = 'Direct capture (Steam only)'
+        capture_mode_direct = 'Direct capture (DXGI preferred, Steam only)'
         capture_mode_fullscreen = 'Fullscreen/borderless direct capture (Steam only)'
         obs_capture_interval = 'Capture interval:'
         capture_resolution = 'Capture resolution:'

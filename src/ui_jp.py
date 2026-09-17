@@ -82,7 +82,7 @@ class UIText:
         capture_mode = 'ゲーム画面取得方法:'
         capture_mode_none = '自動取得なし'
         capture_mode_obs = 'OBS経由'
-        capture_mode_direct = '直接取得(Steam版のみ)'
+        capture_mode_direct = '直接取得(DXGI優先・Steam版のみ)'
         capture_mode_fullscreen = 'フルスクリーン/ボーダーレス直接取得(Steam版のみ)'
         obs_capture_interval = '画面取得間隔:'
         capture_resolution = '画面取得解像度:'

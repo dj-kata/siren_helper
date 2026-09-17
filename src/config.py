@@ -14,7 +14,6 @@ CAPTURE_MODES = (
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
     CAPTURE_MODE_DIRECT,
-    CAPTURE_MODE_FULLSCREEN,
 )
 CAPTURE_RESOLUTION_FULLHD = "1920x1080"
 CAPTURE_RESOLUTION_HALFHD = "960x540"
@@ -107,6 +106,8 @@ class Config:
 
             legacy_obs_enabled = bool(config_data.get("obs_enabled", self.obs_enabled))
             capture_mode = config_data.get("capture_mode")
+            if capture_mode == CAPTURE_MODE_FULLSCREEN:
+                capture_mode = CAPTURE_MODE_DIRECT
             if capture_mode not in CAPTURE_MODES:
                 capture_mode = CAPTURE_MODE_OBS if legacy_obs_enabled else CAPTURE_MODE_NONE
             self.capture_mode = capture_mode
@@ -189,6 +190,8 @@ class Config:
 
     def save_config(self):
         """設定ファイルに設定を保存する"""
+        if self.capture_mode == CAPTURE_MODE_FULLSCREEN:
+            self.capture_mode = CAPTURE_MODE_DIRECT
         if self.capture_mode not in CAPTURE_MODES:
             self.capture_mode = CAPTURE_MODE_NONE
         if self.capture_resolution not in CAPTURE_RESOLUTIONS:
