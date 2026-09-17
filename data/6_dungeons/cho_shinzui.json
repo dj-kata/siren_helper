@@ -12071,7 +12071,7 @@
           1,
           5
         ],
-        "shop_only": true,
+        "shop_only": false,
         "dekkai_reward": true,
         "available": {
           "floor": false,
@@ -12090,7 +12090,7 @@
         },
         "raw_available": {
           "floor": "",
-          "shop": "Table #1",
+          "shop": "Table #1 / 店売限定ではない",
           "wish": "",
           "enemy_drop": "",
           "wall_pillar": "",

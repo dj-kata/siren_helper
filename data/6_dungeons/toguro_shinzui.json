@@ -12440,7 +12440,7 @@
         },
         "raw_available": {
           "floor": "Table #0",
-          "shop": "Table #1",
+          "shop": "Table #1 / 店売限定ではない",
           "wish": "",
           "enemy_drop": "",
           "wall_pillar": "",
