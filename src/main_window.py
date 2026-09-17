@@ -40,7 +40,7 @@ except ImportError:
 
 from src.funcs import load_ui_text
 from src.logger import get_logger
-from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_OBS
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_FULLSCREEN, CAPTURE_MODE_OBS
 from src.byoyon_wall import GRID_SIZE
 from src.item import (
     DUNGEON_ITEM_FLAG_CATEGORIES,
@@ -143,6 +143,11 @@ class MainWindowUI(QMainWindow):
             color = "green"
             self.obs_status_label.setText(
                 f"取得: {self.ui.feature.capture_mode_direct}"
+            )
+        elif self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
+            color = "green"
+            self.obs_status_label.setText(
+                f"取得: {self.ui.feature.capture_mode_fullscreen}"
             )
         else:
             color = "gray"

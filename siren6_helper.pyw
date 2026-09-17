@@ -69,6 +69,7 @@ startup_trace("imported keyboard")
 
 from src.config import (
     CAPTURE_MODE_DIRECT,
+    CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
@@ -81,7 +82,6 @@ startup_trace("imported src.config_dialog")
 from src.direct_capture import capture_shiren_window
 startup_trace("imported src.direct_capture")
 from src.fullscreen_capture import (
-    FullscreenCaptureError,
     capture_shiren_dxgi,
 )
 startup_trace("imported src.fullscreen_capture")
@@ -2003,6 +2003,7 @@ class MainWindow(MainWindowUI):
             if self.config.capture_mode not in (
                 CAPTURE_MODE_OBS,
                 CAPTURE_MODE_DIRECT,
+                CAPTURE_MODE_FULLSCREEN,
             ):
                 self.capture_status = self.ui.main.waiting_capture
                 return
@@ -2103,11 +2104,9 @@ class MainWindow(MainWindowUI):
             self.obs_manager.screenshot()
             return self.obs_manager.screen
         if self.config.capture_mode == CAPTURE_MODE_DIRECT:
-            try:
-                return capture_shiren_dxgi(OCR_CAPTURE_SIZE)
-            except FullscreenCaptureError:
-                logger.debug("DXGI直接取得に失敗したため従来方式にフォールバックします", exc_info=True)
             return capture_shiren_window(OCR_CAPTURE_SIZE)
+        if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
+            return capture_shiren_dxgi(OCR_CAPTURE_SIZE)
         return None
 
     def on_capture_processed(self, result):
@@ -3101,6 +3100,9 @@ class MainWindow(MainWindowUI):
             self.websocket_server.update_shop_price_data(payload)
 
     def select_items_in_table(self, category, items):
+        if category in ("buki", "tate"):
+            return
+
         current_tab_label = ""
         if self.dungeon_data_tabs:
             current_tab_label = self.dungeon_data_tabs.tabText(self.dungeon_data_tabs.currentIndex())
