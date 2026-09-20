@@ -294,6 +294,7 @@ class MainWindow(MainWindowUI):
         self.last_capture_time = None
         self.capture_status = self.ui.main.waiting_capture
         self.latest_screen = None
+        self.capture_screen_lock = threading.Lock()
         self.last_capture_attempt_time = 0.0
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.dungeon_ocr_reader = DungeonOcrReader(self.config)
@@ -1013,7 +1014,9 @@ class MainWindow(MainWindowUI):
                 self.siren_settings.params["item_monster_splitter_sizes"] = sizes
 
     def handle_global_hotkey(self, action):
-        if action == "item_tab_next":
+        if action == "save_image":
+            self.save_image()
+        elif action == "item_tab_next":
             self.move_item_category_tab(1)
         elif action == "item_tab_previous":
             self.move_item_category_tab(-1)
@@ -1972,9 +1975,20 @@ class MainWindow(MainWindowUI):
         self.siren_settings.save_settings()
 
     def save_image(self):
-        """現在取得しているゲーム画面を保存する"""
+        """F6押下時点のゲーム画面を保存する"""
         try:
-            if self.latest_screen is None:
+            save_screen = None
+            try:
+                save_screen = self.capture_game_screen()
+                if save_screen is not None:
+                    self.latest_screen = save_screen
+            except Exception:
+                logger.warning("即時キャプチャに失敗したため直近の画面を保存します", exc_info=True)
+
+            if save_screen is None:
+                save_screen = self.latest_screen
+
+            if save_screen is None:
                 self.statusBar().showMessage("保存できる画面がまだありません", 3000)
                 return False
 
@@ -1983,7 +1997,6 @@ class MainWindow(MainWindowUI):
             filename = escape_for_filename(f"siren6_capture_{date}.{image_format}")
             os.makedirs(self.config.image_save_path, exist_ok=True)
             full_path = Path(self.config.image_save_path) / filename
-            save_screen = self.latest_screen
             fullhd_size = CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD]
             if save_screen.size != fullhd_size:
                 save_screen = save_screen.resize(fullhd_size, Image.Resampling.LANCZOS)
@@ -2111,14 +2124,15 @@ class MainWindow(MainWindowUI):
         return self.last_live_mode
 
     def capture_game_screen(self):
-        if self.config.capture_mode == CAPTURE_MODE_OBS:
-            self.obs_manager.screenshot()
-            return self.obs_manager.screen
-        if self.config.capture_mode == CAPTURE_MODE_DIRECT:
-            return capture_shiren_window(OCR_CAPTURE_SIZE)
-        if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
-            return capture_shiren_dxgi(OCR_CAPTURE_SIZE)
-        return None
+        with self.capture_screen_lock:
+            if self.config.capture_mode == CAPTURE_MODE_OBS:
+                self.obs_manager.screenshot()
+                return self.obs_manager.screen
+            if self.config.capture_mode == CAPTURE_MODE_DIRECT:
+                return capture_shiren_window(OCR_CAPTURE_SIZE)
+            if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
+                return capture_shiren_dxgi(OCR_CAPTURE_SIZE)
+            return None
 
     def on_capture_processed(self, result):
         try:
