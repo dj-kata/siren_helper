@@ -31,6 +31,8 @@ from src.config import (
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
     Config,
+    IMAGE_SAVE_FORMAT_JPG,
+    IMAGE_SAVE_FORMAT_PNG,
 )
 from src.funcs import load_ui_text
 from src.logger import get_logger, set_debug_logging_enabled
@@ -82,6 +84,11 @@ class ConfigDialog(QDialog):
         path_layout.addWidget(self.image_save_path_edit)
         path_layout.addWidget(browse_button)
         form.addRow(self.ui.feature.image_save_path, path_layout)
+
+        self.image_save_format_combo = QComboBox()
+        self.image_save_format_combo.addItem(self.ui.feature.image_save_format_png, IMAGE_SAVE_FORMAT_PNG)
+        self.image_save_format_combo.addItem(self.ui.feature.image_save_format_jpg, IMAGE_SAVE_FORMAT_JPG)
+        form.addRow(self.ui.feature.image_save_format, self.image_save_format_combo)
 
         self.websocket_data_port_edit = QLineEdit()
         self.websocket_data_port_edit.setValidator(QIntValidator(1000, 65535))
@@ -172,6 +179,10 @@ class ConfigDialog(QDialog):
 
     def load_config_values(self):
         self.image_save_path_edit.setText(self.config.image_save_path)
+        image_save_format_index = self.image_save_format_combo.findData(self.config.image_save_format)
+        self.image_save_format_combo.setCurrentIndex(
+            image_save_format_index if image_save_format_index >= 0 else 0
+        )
         self.websocket_data_port_edit.setText(str(self.config.websocket_data_port))
         self.http_server_enabled_check.setChecked(bool(self.config.http_server_enabled))
         self.http_server_port_edit.setText(str(self.config.http_server_port))
@@ -192,6 +203,7 @@ class ConfigDialog(QDialog):
 
     def accept(self):
         self.config.image_save_path = self.image_save_path_edit.text().strip() or "captures"
+        self.config.image_save_format = self.image_save_format_combo.currentData() or IMAGE_SAVE_FORMAT_PNG
         try:
             port = int(self.websocket_data_port_edit.text())
             if 1000 <= port <= 65535:

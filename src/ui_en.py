@@ -71,6 +71,9 @@ class UIText:
         
         other_group = 'Other'
         image_save_path = 'Image save path:'
+        image_save_format = 'Image save format:'
+        image_save_format_png = 'PNG (larger, lossless)'
+        image_save_format_jpg = 'JPG (smaller)'
         autoload_offset = 'Auto-load offset:'
         websocket_port = 'Data display port:'
         http_server_enabled = 'Enable HTTP browser view'

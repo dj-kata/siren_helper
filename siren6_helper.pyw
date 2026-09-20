@@ -74,6 +74,8 @@ from src.config import (
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
     Config,
+    IMAGE_SAVE_FORMAT_JPG,
+    IMAGE_SAVE_JPEG_QUALITY,
     OCR_CAPTURE_SIZE,
 )
 startup_trace("imported src.config")
@@ -1977,14 +1979,23 @@ class MainWindow(MainWindowUI):
                 return False
 
             date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = escape_for_filename(f"siren6_capture_{date}.png")
+            image_format = self.config.image_save_format
+            filename = escape_for_filename(f"siren6_capture_{date}.{image_format}")
             os.makedirs(self.config.image_save_path, exist_ok=True)
             full_path = Path(self.config.image_save_path) / filename
             save_screen = self.latest_screen
             fullhd_size = CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD]
             if save_screen.size != fullhd_size:
                 save_screen = save_screen.resize(fullhd_size, Image.Resampling.LANCZOS)
-            save_screen.save(full_path)
+            if image_format == IMAGE_SAVE_FORMAT_JPG:
+                save_screen.convert("RGB").save(
+                    full_path,
+                    format="JPEG",
+                    quality=IMAGE_SAVE_JPEG_QUALITY,
+                    optimize=True,
+                )
+            else:
+                save_screen.save(full_path, format="PNG", optimize=True)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
             return True
         except Exception as e:
@@ -3201,9 +3212,21 @@ class MainWindow(MainWindowUI):
                             _, scene_item_id = self.obs_manager.search_itemid(scene_name, source_name)
                             if scene_item_id:
                                 filename = os.path.splitext(source_name)[0]
-                                filename += f"_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.png"
+                                image_format = self.config.image_save_format
+                                filename += f"_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.{image_format}"
                                 dst = Path(self.config.image_save_path).resolve() / filename
-                                self.obs_manager.save_screenshot_dst(source_name, str(dst), disable_wh=True)
+                                quality = (
+                                    IMAGE_SAVE_JPEG_QUALITY
+                                    if image_format == IMAGE_SAVE_FORMAT_JPG
+                                    else 100
+                                )
+                                self.obs_manager.save_screenshot_dst(
+                                    source_name,
+                                    str(dst),
+                                    disable_wh=True,
+                                    img_format=image_format,
+                                    quality=quality,
+                                )
                 except Exception as e:
                     logger.error(f"制御実行エラー (trigger: {trigger}, setting: {setting}): {e}")
         except Exception as e:

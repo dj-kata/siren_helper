@@ -71,6 +71,9 @@ class UIText:
         
         other_group = 'その他'
         image_save_path = '画像保存先:'
+        image_save_format = '画像保存形式:'
+        image_save_format_png = 'PNG（高画質・大きめ）'
+        image_save_format_jpg = 'JPG（小さめ）'
         autoload_offset = '自動読み込みオフセット:'
         websocket_port = 'データ表示用port:'
         http_server_enabled = 'HTTPブラウザ表示を有効にする'

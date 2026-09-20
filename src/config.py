@@ -25,6 +25,10 @@ CAPTURE_RESOLUTION_SIZES = {
 }
 OCR_CAPTURE_RESOLUTION = CAPTURE_RESOLUTION_HALFHD
 OCR_CAPTURE_SIZE = CAPTURE_RESOLUTION_SIZES[OCR_CAPTURE_RESOLUTION]
+IMAGE_SAVE_FORMAT_PNG = "png"
+IMAGE_SAVE_FORMAT_JPG = "jpg"
+IMAGE_SAVE_FORMATS = (IMAGE_SAVE_FORMAT_PNG, IMAGE_SAVE_FORMAT_JPG)
+IMAGE_SAVE_JPEG_QUALITY = 70
 
 
 def clamp_int(value, default, minimum, maximum):
@@ -72,6 +76,7 @@ class Config:
 
         # 画像保存
         self.image_save_path = "captures"
+        self.image_save_format = IMAGE_SAVE_FORMAT_PNG
 
         # WebSocketデータ配信
         self.websocket_data_port = 8767
@@ -143,6 +148,10 @@ class Config:
                 capture_resolution = OCR_CAPTURE_RESOLUTION
             self.capture_resolution = capture_resolution
             self.image_save_path = config_data.get("image_save_path", self.image_save_path)
+            image_save_format = config_data.get("image_save_format", self.image_save_format)
+            if image_save_format not in IMAGE_SAVE_FORMATS:
+                image_save_format = IMAGE_SAVE_FORMAT_PNG
+            self.image_save_format = image_save_format
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.http_server_enabled = bool(
                 config_data.get("http_server_enabled", self.http_server_enabled)
@@ -193,6 +202,8 @@ class Config:
             self.capture_mode = CAPTURE_MODE_NONE
         if self.capture_resolution not in CAPTURE_RESOLUTIONS:
             self.capture_resolution = OCR_CAPTURE_RESOLUTION
+        if self.image_save_format not in IMAGE_SAVE_FORMATS:
+            self.image_save_format = IMAGE_SAVE_FORMAT_PNG
         self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
             "obs_enabled": self.obs_enabled,
@@ -215,6 +226,7 @@ class Config:
             "obs_capture_interval_seconds": self.obs_capture_interval_seconds,
             "capture_resolution": self.capture_resolution,
             "image_save_path": self.image_save_path,
+            "image_save_format": self.image_save_format,
             "websocket_data_port": self.websocket_data_port,
             "http_server_enabled": self.http_server_enabled,
             "http_server_host": self.http_server_host,
@@ -256,6 +268,7 @@ class Config:
                 "monitor_source_name": self.monitor_source_name,
                 "obs_scene_collection": self.obs_scene_collection,
                 "image_save_path": self.image_save_path,
+                "image_save_format": self.image_save_format,
                 "websocket_data_port": self.websocket_data_port,
                 "http_server_enabled": self.http_server_enabled,
                 "http_server_port": self.http_server_port,
