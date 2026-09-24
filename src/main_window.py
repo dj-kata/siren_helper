@@ -628,7 +628,7 @@ class MainWindowUI(QMainWindow):
         if KEYBOARD_AVAILABLE:
             try:
                 hotkeys = {
-                    "f6": self.save_image,
+                    "f6": lambda: self.global_hotkey_pressed.emit("save_image"),
                     "ctrl+shift+n": lambda: self.global_hotkey_pressed.emit(
                         "item_tab_next"
                     ),
