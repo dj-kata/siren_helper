@@ -102,6 +102,7 @@ from src.item import (
 )
 startup_trace("imported src.item")
 from src.define import live_exploration_mode_has_status, live_exploration_mode_label
+from src.adventure_result_detector import detect_adventure_result
 from src.byoyon_wall import GRID_SIZE, find_byoyon_candidates
 from src.live_exploration_mode import detect_live_exploration_mode
 from src.logger import get_logger
@@ -303,6 +304,7 @@ class MainWindow(MainWindowUI):
         self.last_live_mode = None
         self.last_live_mode_detect_time = 0.0
         self.live_mode_detect_interval = self.dungeon_ocr_interval
+        self.last_auto_capture_result_signature = None
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
         self.status_ocr_reader = StatusOcrReader(self.config)
@@ -928,6 +930,11 @@ class MainWindow(MainWindowUI):
             for table in (self.monster_table, getattr(self, "item_monster_monster_table", None))
             if table is not None
         ]
+
+    def reset_monster_table_scrollbars(self):
+        for table in self.all_monster_tables():
+            table.scrollToTop()
+            table.verticalScrollBar().setValue(table.verticalScrollBar().minimum())
 
     def all_item_table_sets(self):
         tables = [self.item_tables]
@@ -1992,29 +1999,67 @@ class MainWindow(MainWindowUI):
                 self.statusBar().showMessage("保存できる画面がまだありません", 3000)
                 return False
 
-            date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            image_format = self.config.image_save_format
-            filename = escape_for_filename(f"siren6_capture_{date}.{image_format}")
-            os.makedirs(self.config.image_save_path, exist_ok=True)
-            full_path = Path(self.config.image_save_path) / filename
-            fullhd_size = CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD]
-            if save_screen.size != fullhd_size:
-                save_screen = save_screen.resize(fullhd_size, Image.Resampling.LANCZOS)
-            if image_format == IMAGE_SAVE_FORMAT_JPG:
-                save_screen.convert("RGB").save(
-                    full_path,
-                    format="JPEG",
-                    quality=IMAGE_SAVE_JPEG_QUALITY,
-                    optimize=True,
-                )
-            else:
-                save_screen.save(full_path, format="PNG", optimize=True)
+            filename = self.save_capture_screen(save_screen)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
             return True
         except Exception as e:
             logger.error(f"画像保存エラー: {traceback.format_exc()}")
             self.statusBar().showMessage(f"画像保存エラー: {str(e)}", 3000)
             return False
+
+    def save_capture_screen(self, screen, suffix=None):
+        if screen is None:
+            return None
+
+        date = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        image_format = self.config.image_save_format
+        suffix_part = f"_{suffix}" if suffix else ""
+        filename = escape_for_filename(f"siren6_capture_{date}{suffix_part}.{image_format}")
+        os.makedirs(self.config.image_save_path, exist_ok=True)
+        full_path = self.unique_capture_path(Path(self.config.image_save_path) / filename)
+        save_screen = screen
+        fullhd_size = CAPTURE_RESOLUTION_SIZES[CAPTURE_RESOLUTION_FULLHD]
+        if save_screen.size != fullhd_size:
+            save_screen = save_screen.resize(fullhd_size, Image.Resampling.LANCZOS)
+        if image_format == IMAGE_SAVE_FORMAT_JPG:
+            save_screen.convert("RGB").save(
+                full_path,
+                format="JPEG",
+                quality=IMAGE_SAVE_JPEG_QUALITY,
+                optimize=True,
+            )
+        else:
+            save_screen.save(full_path, format="PNG", optimize=True)
+        return full_path.name
+
+    def unique_capture_path(self, path):
+        if not path.exists():
+            return path
+        for index in range(1, 1000):
+            candidate = path.with_name(f"{path.stem}_{index}{path.suffix}")
+            if not candidate.exists():
+                return candidate
+        return path.with_name(f"{path.stem}_{int(time.time() * 1000)}{path.suffix}")
+
+    def auto_capture_enabled(self, capture_kind):
+        if not self.config.dungeon_ocr_enabled or not self.config.auto_capture_enabled:
+            return False
+        if capture_kind == "floor_change":
+            return self.config.auto_capture_on_floor_change
+        if capture_kind == "adventure_result":
+            return self.config.auto_capture_on_adventure_result
+        return False
+
+    def save_auto_capture(self, screen, suffix):
+        try:
+            filename = self.save_capture_screen(screen, suffix)
+            if filename:
+                self.statusBar().showMessage(f"自動キャプチャしました -> {filename}", 10000)
+                logger.info("自動キャプチャ保存: %s", filename)
+                return True
+        except Exception:
+            logger.error(f"自動キャプチャ保存エラー: {traceback.format_exc()}")
+        return False
 
     def on_obs_connection_changed(self, is_connected: bool, message: str):
         self.update_obs_status_label(is_connected)
@@ -2075,6 +2120,7 @@ class MainWindow(MainWindowUI):
             "shop_result": None,
             "manpuku_result": None,
             "status_result": None,
+            "adventure_result": None,
         }
         try:
             screen = self.capture_game_screen()
@@ -2088,6 +2134,8 @@ class MainWindow(MainWindowUI):
                 dungeon_result, hide_monster_floor = self.read_dungeon_from_screen(screen, live_mode)
                 result["dungeon_result"] = dungeon_result
                 result["hide_monster_floor"] = hide_monster_floor
+                if self.auto_capture_enabled("adventure_result"):
+                    result["adventure_result"] = detect_adventure_result(screen, live_mode)
             if self.config.shop_ocr_enabled:
                 result["shop_result"] = self.read_shop_from_screen(screen, live_mode)
             if self.config.dosukoi_alert_enabled:
@@ -2147,9 +2195,22 @@ class MainWindow(MainWindowUI):
             self.latest_screen = screen
             dungeon_result = result.get("dungeon_result")
             if dungeon_result:
-                self.apply_detected_dungeon_floor(dungeon_result.dungeon_key, dungeon_result.floor)
+                self.apply_detected_dungeon_floor(
+                    dungeon_result.dungeon_key,
+                    dungeon_result.floor,
+                    screen,
+                )
             elif result.get("hide_monster_floor"):
                 self.hide_monster_floor_state()
+
+            adventure_result = result.get("adventure_result")
+            if adventure_result:
+                signature = adventure_result.label
+                if signature != self.last_auto_capture_result_signature:
+                    self.save_auto_capture(screen, signature)
+                    self.last_auto_capture_result_signature = signature
+            else:
+                self.last_auto_capture_result_signature = None
 
             shop_result = result.get("shop_result")
             if shop_result:
@@ -2176,7 +2237,7 @@ class MainWindow(MainWindowUI):
     def update_dungeon_selection_from_screen(self, screen):
         result, hide_monster_floor = self.read_dungeon_from_screen(screen)
         if result:
-            self.apply_detected_dungeon_floor(result.dungeon_key, result.floor)
+            self.apply_detected_dungeon_floor(result.dungeon_key, result.floor, screen)
         elif hide_monster_floor:
             self.hide_monster_floor_state()
 
@@ -2198,7 +2259,7 @@ class MainWindow(MainWindowUI):
             logger.error(f"ダンジョンOCRエラー: {traceback.format_exc()}")
             return None, False
 
-    def apply_detected_dungeon_floor(self, dungeon_key, floor):
+    def apply_detected_dungeon_floor(self, dungeon_key, floor, screen=None):
         if dungeon_key not in MONSTER_FLOOR_DUNGEON_KEYS:
             dungeon_name = next(
                 (
@@ -2217,6 +2278,7 @@ class MainWindow(MainWindowUI):
             return
 
         previous_floor = self.current_monster_floor()
+        floor_changed = floor != previous_floor
         auto_reset = floor < previous_floor
         if auto_reset:
             logger.info(
@@ -2238,6 +2300,11 @@ class MainWindow(MainWindowUI):
         if self.monster_floor_combo.currentData() != floor:
             self.monster_floor_combo.setCurrentIndex(floor_index)
             changed = True
+
+        if changed:
+            self.reset_monster_table_scrollbars()
+            if floor_changed and self.auto_capture_enabled("floor_change"):
+                self.save_auto_capture(screen or self.latest_screen, self.format_floor_label(floor))
 
         if auto_reset:
             dungeon_name = self.dungeon_combo.currentText()

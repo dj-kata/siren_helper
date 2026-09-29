@@ -90,6 +90,21 @@ class ConfigDialog(QDialog):
         self.image_save_format_combo.addItem(self.ui.feature.image_save_format_jpg, IMAGE_SAVE_FORMAT_JPG)
         form.addRow(self.ui.feature.image_save_format, self.image_save_format_combo)
 
+        self.auto_capture_enabled_check = QCheckBox(self.ui.feature.auto_capture_enabled)
+        form.addRow(self.auto_capture_enabled_check)
+
+        auto_capture_detail_layout = QVBoxLayout()
+        auto_capture_detail_layout.setContentsMargins(24, 0, 0, 0)
+        self.auto_capture_on_floor_change_check = QCheckBox(
+            self.ui.feature.auto_capture_on_floor_change
+        )
+        auto_capture_detail_layout.addWidget(self.auto_capture_on_floor_change_check)
+        self.auto_capture_on_adventure_result_check = QCheckBox(
+            self.ui.feature.auto_capture_on_adventure_result
+        )
+        auto_capture_detail_layout.addWidget(self.auto_capture_on_adventure_result_check)
+        form.addRow(auto_capture_detail_layout)
+
         self.websocket_data_port_edit = QLineEdit()
         self.websocket_data_port_edit.setValidator(QIntValidator(1000, 65535))
         form.addRow(self.ui.feature.websocket_port, self.websocket_data_port_edit)
@@ -139,6 +154,7 @@ class ConfigDialog(QDialog):
         dosukoi_form.addRow(self.ui.feature.obs_capture_interval, self.obs_capture_interval_spin)
 
         self.dungeon_ocr_enabled_check = QCheckBox(self.ui.feature.dungeon_ocr_enabled)
+        self.dungeon_ocr_enabled_check.toggled.connect(self.update_auto_capture_controls)
         dosukoi_form.addRow(self.dungeon_ocr_enabled_check)
 
         self.shop_ocr_enabled_check = QCheckBox(self.ui.feature.shop_ocr_enabled)
@@ -162,9 +178,19 @@ class ConfigDialog(QDialog):
             self.dosukoi_alert_volume_combo.addItem(f"{volume}", volume)
         dosukoi_form.addRow(self.ui.feature.dosukoi_alert_volume, self.dosukoi_alert_volume_combo)
 
+        self.auto_capture_enabled_check.toggled.connect(self.update_auto_capture_controls)
+
         layout.addWidget(dosukoi_group)
         layout.addStretch()
         return widget
+
+    def update_auto_capture_controls(self):
+        dungeon_ocr_enabled = self.dungeon_ocr_enabled_check.isChecked()
+        auto_capture_enabled = self.auto_capture_enabled_check.isChecked()
+        self.auto_capture_enabled_check.setEnabled(dungeon_ocr_enabled)
+        detail_enabled = dungeon_ocr_enabled and auto_capture_enabled
+        self.auto_capture_on_floor_change_check.setEnabled(detail_enabled)
+        self.auto_capture_on_adventure_result_check.setEnabled(detail_enabled)
 
     def on_browse_clicked(self):
         current_dir = self.image_save_path_edit.text()
@@ -183,6 +209,13 @@ class ConfigDialog(QDialog):
         self.image_save_format_combo.setCurrentIndex(
             image_save_format_index if image_save_format_index >= 0 else 0
         )
+        self.auto_capture_enabled_check.setChecked(bool(self.config.auto_capture_enabled))
+        self.auto_capture_on_floor_change_check.setChecked(
+            bool(self.config.auto_capture_on_floor_change)
+        )
+        self.auto_capture_on_adventure_result_check.setChecked(
+            bool(self.config.auto_capture_on_adventure_result)
+        )
         self.websocket_data_port_edit.setText(str(self.config.websocket_data_port))
         self.http_server_enabled_check.setChecked(bool(self.config.http_server_enabled))
         self.http_server_port_edit.setText(str(self.config.http_server_port))
@@ -200,10 +233,16 @@ class ConfigDialog(QDialog):
         self.dosukoi_alert_threshold_spin.setValue(self.config.dosukoi_alert_threshold)
         self.entou_alert_enabled_check.setChecked(self.config.entou_alert_enabled)
         self.main_font_size_spin.setValue(self.config.main_font_size)
+        self.update_auto_capture_controls()
 
     def accept(self):
         self.config.image_save_path = self.image_save_path_edit.text().strip() or "captures"
         self.config.image_save_format = self.image_save_format_combo.currentData() or IMAGE_SAVE_FORMAT_PNG
+        self.config.auto_capture_enabled = self.auto_capture_enabled_check.isChecked()
+        self.config.auto_capture_on_floor_change = self.auto_capture_on_floor_change_check.isChecked()
+        self.config.auto_capture_on_adventure_result = (
+            self.auto_capture_on_adventure_result_check.isChecked()
+        )
         try:
             port = int(self.websocket_data_port_edit.text())
             if 1000 <= port <= 65535:

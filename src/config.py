@@ -77,6 +77,9 @@ class Config:
         # 画像保存
         self.image_save_path = "captures"
         self.image_save_format = IMAGE_SAVE_FORMAT_PNG
+        self.auto_capture_enabled = False
+        self.auto_capture_on_floor_change = False
+        self.auto_capture_on_adventure_result = False
 
         # WebSocketデータ配信
         self.websocket_data_port = 8767
@@ -152,6 +155,21 @@ class Config:
             if image_save_format not in IMAGE_SAVE_FORMATS:
                 image_save_format = IMAGE_SAVE_FORMAT_PNG
             self.image_save_format = image_save_format
+            self.auto_capture_enabled = bool(
+                config_data.get("auto_capture_enabled", self.auto_capture_enabled)
+            )
+            self.auto_capture_on_floor_change = bool(
+                config_data.get(
+                    "auto_capture_on_floor_change",
+                    self.auto_capture_on_floor_change,
+                )
+            )
+            self.auto_capture_on_adventure_result = bool(
+                config_data.get(
+                    "auto_capture_on_adventure_result",
+                    self.auto_capture_on_adventure_result,
+                )
+            )
             self.websocket_data_port = config_data.get("websocket_data_port", self.websocket_data_port)
             self.http_server_enabled = bool(
                 config_data.get("http_server_enabled", self.http_server_enabled)
@@ -204,6 +222,9 @@ class Config:
             self.capture_resolution = OCR_CAPTURE_RESOLUTION
         if self.image_save_format not in IMAGE_SAVE_FORMATS:
             self.image_save_format = IMAGE_SAVE_FORMAT_PNG
+        self.auto_capture_enabled = bool(self.auto_capture_enabled)
+        self.auto_capture_on_floor_change = bool(self.auto_capture_on_floor_change)
+        self.auto_capture_on_adventure_result = bool(self.auto_capture_on_adventure_result)
         self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
             "obs_enabled": self.obs_enabled,
@@ -227,6 +248,9 @@ class Config:
             "capture_resolution": self.capture_resolution,
             "image_save_path": self.image_save_path,
             "image_save_format": self.image_save_format,
+            "auto_capture_enabled": self.auto_capture_enabled,
+            "auto_capture_on_floor_change": self.auto_capture_on_floor_change,
+            "auto_capture_on_adventure_result": self.auto_capture_on_adventure_result,
             "websocket_data_port": self.websocket_data_port,
             "http_server_enabled": self.http_server_enabled,
             "http_server_host": self.http_server_host,

@@ -18,6 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+from src.adventure_result_detector import detect_adventure_result
 from src.config import OCR_CAPTURE_RESOLUTION, OCR_CAPTURE_SIZE
 from src.define import (
     DetectOnShop,
@@ -431,6 +432,13 @@ def print_result(result):
         print(f"  lines: {status['lines']}")
         print(f"  raw: {status['raw_texts']}")
 
+    adventure_result = result["adventure_result"]
+    print("冒険結果画面:")
+    if adventure_result:
+        print(f"  判定: {adventure_result['label']}")
+    else:
+        print("  判定なし")
+
     shop = result["shop_inspection"]
     print("ショップ/アイテム画面:")
     print(f"  アイテム画面らしい: {shop['is_item_screen']}")
@@ -505,6 +513,11 @@ def main():
         shop_inspection = inspect_shop_crops(shop_reader, image, live_mode)
         manpuku = inspect_manpuku_crops(shop_reader, image, live_mode)
         status = inspect_status_crops(status_reader, image, live_mode)
+        adventure_result = detect_adventure_result(image, live_mode)
+        adventure_result_data = None
+        if adventure_result:
+            adventure_result_data = asdict(adventure_result)
+            adventure_result_data["label"] = adventure_result.label
         shop_result = shop_reader.read(image, live_mode)
         candidate_info = resolve_candidates(itemlist, shop_result, matched_dungeon)
 
@@ -519,6 +532,7 @@ def main():
             "dungeon": dungeon,
             "manpuku": manpuku,
             "status": status,
+            "adventure_result": adventure_result_data,
             "shop_inspection": shop_inspection,
             "shop_result": asdict(shop_result) if shop_result else None,
             "candidate_info": candidate_info,
