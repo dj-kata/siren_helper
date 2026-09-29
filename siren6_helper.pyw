@@ -71,6 +71,10 @@ from src.config import (
     CAPTURE_MODE_DIRECT,
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
+    AUTO_CAPTURE_FLOOR_INTERVAL_10,
+    AUTO_CAPTURE_FLOOR_INTERVAL_25,
+    AUTO_CAPTURE_FLOOR_INTERVAL_5,
+    AUTO_CAPTURE_FLOOR_INTERVAL_ALL,
     CAPTURE_RESOLUTION_FULLHD,
     CAPTURE_RESOLUTION_SIZES,
     Config,
@@ -2061,6 +2065,20 @@ class MainWindow(MainWindowUI):
             logger.error(f"自動キャプチャ保存エラー: {traceback.format_exc()}")
         return False
 
+    def should_auto_capture_floor(self, floor):
+        if floor in (1, 99):
+            return True
+        interval = self.config.auto_capture_floor_interval
+        if interval == AUTO_CAPTURE_FLOOR_INTERVAL_ALL:
+            return True
+        interval_values = {
+            AUTO_CAPTURE_FLOOR_INTERVAL_5: 5,
+            AUTO_CAPTURE_FLOOR_INTERVAL_10: 10,
+            AUTO_CAPTURE_FLOOR_INTERVAL_25: 25,
+        }
+        step = interval_values.get(interval)
+        return bool(step and floor % step == 0)
+
     def on_obs_connection_changed(self, is_connected: bool, message: str):
         self.update_obs_status_label(is_connected)
         if is_connected:
@@ -2303,7 +2321,11 @@ class MainWindow(MainWindowUI):
 
         if changed:
             self.reset_monster_table_scrollbars()
-            if floor_changed and self.auto_capture_enabled("floor_change"):
+            if (
+                floor_changed
+                and self.auto_capture_enabled("floor_change")
+                and self.should_auto_capture_floor(floor)
+            ):
                 self.save_auto_capture(screen or self.latest_screen, self.format_floor_label(floor))
 
         if auto_reset:

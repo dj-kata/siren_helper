@@ -29,6 +29,16 @@ IMAGE_SAVE_FORMAT_PNG = "png"
 IMAGE_SAVE_FORMAT_JPG = "jpg"
 IMAGE_SAVE_FORMATS = (IMAGE_SAVE_FORMAT_PNG, IMAGE_SAVE_FORMAT_JPG)
 IMAGE_SAVE_JPEG_QUALITY = 70
+AUTO_CAPTURE_FLOOR_INTERVAL_ALL = "all"
+AUTO_CAPTURE_FLOOR_INTERVAL_5 = "5"
+AUTO_CAPTURE_FLOOR_INTERVAL_10 = "10"
+AUTO_CAPTURE_FLOOR_INTERVAL_25 = "25"
+AUTO_CAPTURE_FLOOR_INTERVALS = (
+    AUTO_CAPTURE_FLOOR_INTERVAL_ALL,
+    AUTO_CAPTURE_FLOOR_INTERVAL_5,
+    AUTO_CAPTURE_FLOOR_INTERVAL_10,
+    AUTO_CAPTURE_FLOOR_INTERVAL_25,
+)
 
 
 def clamp_int(value, default, minimum, maximum):
@@ -79,6 +89,7 @@ class Config:
         self.image_save_format = IMAGE_SAVE_FORMAT_PNG
         self.auto_capture_enabled = False
         self.auto_capture_on_floor_change = False
+        self.auto_capture_floor_interval = AUTO_CAPTURE_FLOOR_INTERVAL_ALL
         self.auto_capture_on_adventure_result = False
 
         # WebSocketデータ配信
@@ -164,6 +175,13 @@ class Config:
                     self.auto_capture_on_floor_change,
                 )
             )
+            auto_capture_floor_interval = config_data.get(
+                "auto_capture_floor_interval",
+                self.auto_capture_floor_interval,
+            )
+            if auto_capture_floor_interval not in AUTO_CAPTURE_FLOOR_INTERVALS:
+                auto_capture_floor_interval = AUTO_CAPTURE_FLOOR_INTERVAL_ALL
+            self.auto_capture_floor_interval = auto_capture_floor_interval
             self.auto_capture_on_adventure_result = bool(
                 config_data.get(
                     "auto_capture_on_adventure_result",
@@ -224,6 +242,8 @@ class Config:
             self.image_save_format = IMAGE_SAVE_FORMAT_PNG
         self.auto_capture_enabled = bool(self.auto_capture_enabled)
         self.auto_capture_on_floor_change = bool(self.auto_capture_on_floor_change)
+        if self.auto_capture_floor_interval not in AUTO_CAPTURE_FLOOR_INTERVALS:
+            self.auto_capture_floor_interval = AUTO_CAPTURE_FLOOR_INTERVAL_ALL
         self.auto_capture_on_adventure_result = bool(self.auto_capture_on_adventure_result)
         self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
@@ -250,6 +270,7 @@ class Config:
             "image_save_format": self.image_save_format,
             "auto_capture_enabled": self.auto_capture_enabled,
             "auto_capture_on_floor_change": self.auto_capture_on_floor_change,
+            "auto_capture_floor_interval": self.auto_capture_floor_interval,
             "auto_capture_on_adventure_result": self.auto_capture_on_adventure_result,
             "websocket_data_port": self.websocket_data_port,
             "http_server_enabled": self.http_server_enabled,

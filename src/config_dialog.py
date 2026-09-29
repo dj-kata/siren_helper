@@ -7,6 +7,7 @@ import os
 
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QRadioButton,
     QSpinBox,
     QTabWidget,
     QVBoxLayout,
@@ -30,6 +32,10 @@ from src.config import (
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
+    AUTO_CAPTURE_FLOOR_INTERVAL_10,
+    AUTO_CAPTURE_FLOOR_INTERVAL_25,
+    AUTO_CAPTURE_FLOOR_INTERVAL_5,
+    AUTO_CAPTURE_FLOOR_INTERVAL_ALL,
     Config,
     IMAGE_SAVE_FORMAT_JPG,
     IMAGE_SAVE_FORMAT_PNG,
@@ -95,10 +101,26 @@ class ConfigDialog(QDialog):
 
         auto_capture_detail_layout = QVBoxLayout()
         auto_capture_detail_layout.setContentsMargins(24, 0, 0, 0)
+        floor_change_layout = QHBoxLayout()
         self.auto_capture_on_floor_change_check = QCheckBox(
             self.ui.feature.auto_capture_on_floor_change
         )
-        auto_capture_detail_layout.addWidget(self.auto_capture_on_floor_change_check)
+        self.auto_capture_on_floor_change_check.toggled.connect(self.update_auto_capture_controls)
+        floor_change_layout.addWidget(self.auto_capture_on_floor_change_check)
+        self.auto_capture_floor_interval_group = QButtonGroup(self)
+        self.auto_capture_floor_interval_buttons = []
+        for label, value in (
+            (self.ui.feature.auto_capture_floor_interval_all, AUTO_CAPTURE_FLOOR_INTERVAL_ALL),
+            (self.ui.feature.auto_capture_floor_interval_5, AUTO_CAPTURE_FLOOR_INTERVAL_5),
+            (self.ui.feature.auto_capture_floor_interval_10, AUTO_CAPTURE_FLOOR_INTERVAL_10),
+            (self.ui.feature.auto_capture_floor_interval_25, AUTO_CAPTURE_FLOOR_INTERVAL_25),
+        ):
+            button = QRadioButton(label)
+            self.auto_capture_floor_interval_group.addButton(button)
+            self.auto_capture_floor_interval_buttons.append((button, value))
+            floor_change_layout.addWidget(button)
+        floor_change_layout.addStretch()
+        auto_capture_detail_layout.addLayout(floor_change_layout)
         self.auto_capture_on_adventure_result_check = QCheckBox(
             self.ui.feature.auto_capture_on_adventure_result
         )
@@ -189,7 +211,10 @@ class ConfigDialog(QDialog):
         auto_capture_enabled = self.auto_capture_enabled_check.isChecked()
         self.auto_capture_enabled_check.setEnabled(dungeon_ocr_enabled)
         detail_enabled = dungeon_ocr_enabled and auto_capture_enabled
+        floor_change_enabled = detail_enabled and self.auto_capture_on_floor_change_check.isChecked()
         self.auto_capture_on_floor_change_check.setEnabled(detail_enabled)
+        for button, _value in self.auto_capture_floor_interval_buttons:
+            button.setEnabled(floor_change_enabled)
         self.auto_capture_on_adventure_result_check.setEnabled(detail_enabled)
 
     def on_browse_clicked(self):
@@ -213,6 +238,13 @@ class ConfigDialog(QDialog):
         self.auto_capture_on_floor_change_check.setChecked(
             bool(self.config.auto_capture_on_floor_change)
         )
+        floor_interval = self.config.auto_capture_floor_interval
+        for button, value in self.auto_capture_floor_interval_buttons:
+            if value == floor_interval:
+                button.setChecked(True)
+                break
+        else:
+            self.auto_capture_floor_interval_buttons[0][0].setChecked(True)
         self.auto_capture_on_adventure_result_check.setChecked(
             bool(self.config.auto_capture_on_adventure_result)
         )
@@ -240,6 +272,11 @@ class ConfigDialog(QDialog):
         self.config.image_save_format = self.image_save_format_combo.currentData() or IMAGE_SAVE_FORMAT_PNG
         self.config.auto_capture_enabled = self.auto_capture_enabled_check.isChecked()
         self.config.auto_capture_on_floor_change = self.auto_capture_on_floor_change_check.isChecked()
+        self.config.auto_capture_floor_interval = AUTO_CAPTURE_FLOOR_INTERVAL_ALL
+        for button, value in self.auto_capture_floor_interval_buttons:
+            if button.isChecked():
+                self.config.auto_capture_floor_interval = value
+                break
         self.config.auto_capture_on_adventure_result = (
             self.auto_capture_on_adventure_result_check.isChecked()
         )
