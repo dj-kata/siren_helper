@@ -13,4 +13,8 @@ RUN apt-get update \
         libxcb-cursor0 \
     && rm -rf /var/lib/apt/lists/*
 
+# Use Emacs shell editing even when EDITOR/VISUAL=vim; load before user fzf bindings.
+# System zshrc survives install-dotfiles replacing the user's .zshrc.
+RUN printf '%s\n' 'bindkey -e' >> /etc/zsh/zshrc
+
 WORKDIR /workspace/siren_helper

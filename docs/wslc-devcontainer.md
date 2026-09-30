@@ -227,3 +227,27 @@ Windows 用の `.venv` や `.venv-win` は Linux では実行できません。
 Linux 版 uv と `.venv-linux` は Codex の調査・静的検査・Linux 対応テスト用です。
 アプリ本体の実行・GUI デバッグ・Windows 固有機能の検証には Windows 版 uv と
 `.venv-win` を使用します。Linux 上の検査は Windows 上の動作確認を代替しません。
+
+## ターミナルのキーバインド
+
+`EDITOR` / `VISUAL=vim` による vi モードの自動選択を上書きし、
+`/etc/zsh/zshrc` の `bindkey -e` で Emacs キーバインドを選択します。
+Ctrl-A / E（行頭・行末）、Ctrl-B / F（左右）、Ctrl-P / N（履歴）、
+Ctrl-K（カーソル以降の削除）、Ctrl-U（行全体の削除）、Ctrl-W（前の単語の削除）、Ctrl-Y（貼り戻し）などを利用できます。
+fzf の設定はその後に読み込まれるので、Ctrl-R の fzf 履歴検索も維持します。
+`EDITOR` 自体は変更しないため、Git などから起動するエディタは引き続き vim です。
+
+新しいターミナルから有効になります。既存のターミナルでは次を実行してください。
+
+```zsh
+bindkey -e
+bindkey -M emacs '^R' fzf-history-widget
+```
+
+既存のターミナルが vi モードで起動していた場合、fzf の割り当てが vi 側だけに
+登録されているため、`bindkey -e` 単独では Ctrl-R が通常の履歴検索に戻ります。
+上記の二行目で Emacs 側にも登録します。新しいターミナルでは起動時に
+Emacs モードが選択されてから fzf が登録されるため、この操作は不要です。
+
+今後コンテナを作り直す場合も維持するには、変更後の Containerfile で
+`make build-devcontainer` を行い、そのイメージでコンテナを再作成してください。
