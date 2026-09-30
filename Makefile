@@ -50,3 +50,21 @@ clean:
 
 test:
 	@$(wuv) run python $(main_file_name).pyw
+
+DEVCONTAINER_IMAGE ?= localhost/siren6-helper-dev:dev
+BASE_IMAGE ?= localhost/wslc-dev-base:dev
+WSLC ?= /mnt/c/Program\ Files/WSL/wslc.exe
+CONTAINER_ENGINE ?= $(WSLC)
+
+.PHONY: build-devcontainer check-devcontainer
+
+build-devcontainer:
+	$(CONTAINER_ENGINE) build \
+		--build-arg BASE_IMAGE=$(BASE_IMAGE) \
+		-f .devcontainer/Containerfile \
+		-t $(DEVCONTAINER_IMAGE) \
+		.
+
+check-devcontainer:
+	$(CONTAINER_ENGINE) run --rm $(DEVCONTAINER_IMAGE) zsh --version
+	$(CONTAINER_ENGINE) run --rm $(DEVCONTAINER_IMAGE) uv --version

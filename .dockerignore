@@ -1,0 +1,4 @@
+# The project image only adds system packages; source is bind-mounted at runtime.
+**
+!.devcontainer/
+!.devcontainer/Containerfile

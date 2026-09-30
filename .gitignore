@@ -8,6 +8,15 @@ siren6_helper/*
 out/*
 captures/*
 .venv/*
+.venv-linux/*
+.venv-win/*
 src/*.egg-info/*
 *.json
 *.xml
+!.devcontainer/devcontainer.json
+!.vscode/settings.json
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example

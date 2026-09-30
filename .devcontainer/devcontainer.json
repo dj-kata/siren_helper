@@ -1,0 +1,45 @@
+{
+  "name": "siren6-helper",
+  "image": "localhost/siren6-helper-dev:dev",
+  "workspaceFolder": "/workspace/siren_helper",
+  "workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspace/siren_helper",
+  "remoteUser": "vscode",
+  "postCreateCommand": "sudo mkdir -p /home/vscode/.codex && sudo chown -R vscode:vscode /home/vscode/.codex && install-dotfiles && setup-git-identity && scripts/setup-linux-venv.sh --no-install-project",
+  "postStartCommand": "sudo mkdir -p /home/vscode/.codex && sudo chown -R vscode:vscode /home/vscode/.codex && install-dotfiles",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv-linux/bin/python",
+        "github.copilot.enable": {
+          "*": false
+        },
+        "github.copilot.editor.enableAutoCompletions": false,
+        "github.copilot.chat.enabled": false,
+        "chatgpt.openOnStartup": false,
+        "chatgpt.runCodexInWindowsSubsystemForLinux": true
+      },
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "redhat.vscode-yaml",
+        "streetsidesoftware.code-spell-checker",
+        "usernamehw.errorlens",
+        "openai.chatgpt"
+      ]
+    }
+  },
+  "mounts": [
+    "type=volume,source=siren6-helper-codex-home,target=/home/vscode/.codex",
+    "type=bind,source=${localEnv:USERPROFILE}\\.codex,target=/mnt/host-codex,readonly"
+  ],
+  "containerEnv": {
+    "CODEX_HOME": "/home/vscode/.codex",
+    "UV_PROJECT_ENVIRONMENT": ".venv-linux"
+  },
+  "containerUser": "root"
+}
