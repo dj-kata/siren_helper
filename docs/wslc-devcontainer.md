@@ -159,26 +159,42 @@ WSLc コンテナでは上記の `make windows-sync` を使用してください
 
 ## Git のコミット名・メール
 
-Windows 側の `initializeCommand` で `git.exe config --get user.name` / `user.email`
-をプロジェクトのディレクトリで実行し、Git 対象外の
-`.windows-bridge/git-identity.config` に二項目だけ保存します。
-ホスト上で適用される `include` / `includeIf` も Windows Git が解決します。
-コンテナの作成時・接続時に `scripts/setup-git-identity.sh` が取り込み、
-`vscode` ユーザーのグローバル設定へ反映します。
-認証ヘルパーなどの既存設定は保持し、リポジトリ固有の `user.*` 設定があればそちらが優先されます。
+設定元は **ホストの通常の WSL** です。Windows Git のインストールは不要です。
+Windows 側の `initializeCommand` が `wsl.exe` を使い、既定ディストリビューションで
+プロジェクトのパスを `wslpath` により変換してから `git config --get user.name` /
+`user.email` を実行します。`include` / `includeIf` はその WSL の Git が解決します。
+取得した二項目を Git 対象外の `.windows-bridge/git-identity.config` へ保存し、
+作成時・接続時に `scripts/setup-git-identity.sh` がコンテナのグローバル設定へ反映します。
+これは自動生成されるコピーであり、名前・メールを二か所で手動管理する必要はありません。
+認証ヘルパーなどの既存設定は保持し、リポジトリ固有の `user.*` があればそちらが優先されます。
 
-Windows 側の VS Code から `Reopen Folder Locally` → `Reopen in Container` で反映できます。
-ホスト側の名前・メールを変更した場合も開き直してください。
-ホストから取得できない項目は、既存のコンテナ設定を保持し、未設定なら
-ベースの `setup-git-identity` による `.env` の `GIT_USER_NAME` / `GIT_USER_EMAIL` を利用します。
+取得先を既定以外の WSL にする場合は、Windows 側の環境変数
+`GIT_IDENTITY_WSL_DISTRO` にディストリビューション名を指定して VS Code を起動してください。
+取得に失敗した場合は、空ファイルで成功扱いにせず初期化をエラーにします。
+
+Windows 側の VS Code から `Reopen Folder Locally` → `Reopen in Container` で同期します。
+待受が動いていれば、コンテナ内から現在の設定を再取得・反映することもできます。
 
 ```bash
+make windows-check
+scripts/setup-git-identity.sh
 git config --show-origin --get user.name
 git config --show-origin --get user.email
 ```
 
-Windows Git が PATH にない場合は Dev Containers のログに警告を出します。
-この場合は Windows 側で Git を利用可能にするか、上記の `.env` の補完設定を使用してください。
+ホスト連携を使わず直接コンテナを起動する場合は、従来のベース側
+`setup-git-identity` による `.env` の `GIT_USER_NAME` / `GIT_USER_EMAIL` の補完も残しています。
+
+### ベースイメージへの共通化
+
+現在の同期スクリプトはこのリポジトリにあります。複数の派生プロジェクトで同じ処理を
+コピーして管理する形を避けるには、`wslc-dev-base` 側へ共通処理を移す必要があります。
+ベースの `devcontainer.json` 自体は `FROM` では継承されません。
+一方、[Dev Container のイメージメタデータ](https://github.com/devcontainers/spec/blob/main/docs/specs/devcontainer-reference.md#image-metadata)
+を使えば、マウント・コンテナ内の接続時処理などはベースイメージに集約できます。
+ホスト側でイメージ処理に先行する `initializeCommand` は、このメタデータの継承対象ではありません。
+WSL からの取得を共通のホスト側起動処理にまとめるか、ホスト設定を直接マウントする構成を
+ベース側で設計する必要があります。`FROM` 単独でホストの設定ファイルへアクセスできるわけではありません。
 
 ## Git の接続確認
 

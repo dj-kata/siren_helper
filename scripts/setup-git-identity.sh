@@ -28,6 +28,6 @@ setup-git-identity
 
 for key in user.name user.email; do
   if ! git config --get "$key" >/dev/null; then
-    echo "Git $key is unset. Configure Windows Git and reopen in Dev Containers." >&2
+    echo "Git $key is unset. Configure Git in the host WSL distro and reopen in Dev Containers." >&2
   fi
 done

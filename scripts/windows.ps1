@@ -39,7 +39,10 @@ try {
     $env:UV_PROJECT_ENVIRONMENT = Join-Path $projectRoot '.venv-win'
     $env:VIRTUAL_ENV = $null
     switch ($Action) {
-        'check' { & $uvPath --version }
+        'check' {
+            & (Join-Path $PSScriptRoot 'export-git-identity.ps1')
+            & $uvPath --version
+        }
         'sync' { & $uvPath sync }
         'run' { & $uvPath run python siren6_helper.pyw }
         'build' {
