@@ -10,5 +10,5 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
-uv venv .venv-linux --python "${python_version}"
-UV_PROJECT_ENVIRONMENT=.venv-linux uv sync "$@"
+# sync creates a missing environment and preserves an existing one on retries.
+UV_PROJECT_ENVIRONMENT=.venv-linux uv sync --python "${python_version}" "$@"

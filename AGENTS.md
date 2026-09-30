@@ -1,3 +1,4 @@
 - 常に日本語で回答すること
-- python実行については、必ずWindows版uv（`/mnt/c/Users/katao/.local/bin/uv.exe`）経由で実行すること
-- WSL/Ubuntu側の `uv` コマンドは使わないこと
+- Codexのコンテナ内での調査・静的検査・Linuxで実行可能なテストにはLinux版 `uv` を使用してよい。仮想環境は `.venv-linux` を使うこと
+- アプリ本体の実行・GUIデバッグ・Windows固有機能の検証はWindows側で行うこと。Windows版uv（`/mnt/c/Users/katao/.local/bin/uv.exe`）を使い、仮想環境は `.venv-win` を使うこと
+- Linux用とWindows用の仮想環境を共有・上書きしないこと。Linuxでの検査結果だけでWindows上の動作を検証済みとしないこと

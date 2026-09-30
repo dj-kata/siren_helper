@@ -66,25 +66,87 @@ Dev Container 作成時に `.venv-linux` が作成されます。
 scripts/setup-linux-venv.sh
 ```
 
-## Windows venv
+## コンテナから Windows で実行・ビルドする
 
-Windows で GUI 実行やビルド確認をする場合は、WSL ホスト側から次を実行します。
+通常の WSL と異なり、この WSLc コンテナには `/mnt/c` や Windows exe の
+相互運用機構がありません。`uv.exe` のマウントだけでは実行できません。
+既存の `workspaceMount` で共有したファイルを使い、Windows 側の待受に処理を依頼します。
+追加のマウント・ネットワークポートは不要です。自動起動設定の反映には Windows 側から Dev Containers で開き直してください。
+Windows 側とコンテナ側で同じチェックアウトを参照する必要があります。
 
-```bash
-scripts/setup-windows-venv.sh
+1. **Windows 側の VS Code** でプロジェクトを開き、`Dev Containers: Reopen in Container` を実行します。
+
+   `initializeCommand` が Windows 側で待受を非表示で起動します。
+   PowerShell のウィンドウを開いたままにする必要はありません。
+   起動済みの待受は再利用し、同時に開いた場合も起動処理を直列化します。
+   初回の切り替え時は、以前手動起動した待受を Ctrl+C で終了してから開き直してください。
+   WSL 内の VS Code や `wslc run` 単独では、この Windows 側フックは動作しません。
+
+2. **コンテナ側** で実行します。
+
+   ```bash
+   make windows-check  # Windows uv のバージョン確認
+   make windows-sync   # .venv-win の作成・依存同期
+   make test           # Windows 上で GUI 起動（自動テストではありません）
+   make build          # Windows 上で cx_Freeze ビルド
+   make                # 必要ならビルドし、コンテナ側の 7z で ZIP 作成
+   ```
+
+`run` / `build` も uv が依存を同期するため、`windows-sync` は必要なときだけで構いません。
+Windows 側の uv は常に `.venv-win` を使用し、コンテナの `.venv-linux` と分離します。
+ビルド出力は `siren6_helper/` です。Linux 側の連携クライアントは
+Linux 版 uv で Python 標準ライブラリのみを使って動作します。
+
+uv の既定パスは Windows の `%USERPROFILE%\.local\bin\uv.exe` です。
+変更する場合は `.env` に次のように記載します（環境変数 `WINDOWS_UV_PATH` が優先）。
+
+```dotenv
+WINDOWS_UV_PATH=C:\Users\katao\.local\bin\uv.exe
 ```
 
-Windows の uv.exe が既定パス以外にある場合は、`UV_WIN` を指定します。
+値は Windows の絶対パスです。空白入りのパスと外側の引用符に対応し、
+`%USERPROFILE%` などの変数展開や末尾コメントには対応しません。
+この設定は Windows 側の処理ごとに読み込むため、コンテナ再作成は不要です。
+Dev Containers が `.env` を自動的にマウント設定へ展開する構成ではありません。
 
-```bash
-UV_WIN=/mnt/c/path/to/uv.exe scripts/setup-windows-venv.sh
+標準出力・標準エラーと終了コードはコンテナに返ります。タスクは一度に一つ実行し、
+アプリ起動中の次の依頼は終了まで待機します。コンテナの Ctrl+C は該当タスクの
+Windows プロセスツリーの停止を要求します。手動で前面起動した待受の Ctrl+C も実行中タスクを停止します。
+待受未起動・停止時はエラーになります。起動後にコマンドを再実行してください。
+待受再起動時は古い依頼を再実行しません。
+
+待受は VS Code / コンテナを閉じた後も動作し、次回の接続で再利用します。
+Windows のログアウトで終了します。明示的に停止する場合は Windows の PowerShell で実行します
+（実行中の GUI・ビルドも停止します）。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\manage-windows-host.ps1 stop
 ```
 
-Windows venv でコマンドを実行する例です。
+手動で非表示起動する場合は末尾の `stop` を省略します。
+起動失敗時は `.windows-bridge/host.stderr.log`、通常の待受ログは
+`.windows-bridge/host.stdout.log` を確認してください。
+アプリの出力はこれまで通りコンテナの端末へ返ります。
 
-```bash
-UV_PROJECT_ENVIRONMENT=.venv-win /mnt/c/Users/katao/.local/bin/uv.exe run python -m py_compile siren6_helper.pyw
+自動起動には Dev Containers のホスト側
+[`initializeCommand`](https://github.com/devcontainers/spec/blob/main/docs/specs/devcontainerjson-reference.md#lifecycle-scripts)
+を使用します。WSLc 自体に常駐処理を登録する変更ではありません。
+
+
+`.windows-bridge/` は Git 対象外の一時的な依頼・ログ置き場です。
+中断した依頼が残った場合は、待受とクライアントを終了してから削除できます。
+待受は共有ワークスペースから固定の `check` / `sync` / `run` / `build` のみ受け付け、
+そのワークスペースのコードを Windows ユーザー権限で実行します。
+
+Windows 側だけで実行することもできます。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows.ps1 run
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows.ps1 build
 ```
+
+従来の `scripts/setup-windows-venv.sh` は Windows 相互運用が有効な通常の WSL 向けです。
+WSLc コンテナでは上記の `make windows-sync` を使用してください。
 
 ## バージョン管理するもの
 
@@ -94,6 +156,29 @@ UV_PROJECT_ENVIRONMENT=.venv-win /mnt/c/Users/katao/.local/bin/uv.exe run python
 - `.env.example`: 個人設定の項目例。実際の `.env` は Git から除外します。
 
 `install-dotfiles`、`setup-git-identity`、`devcontainer-entrypoint` と共通 dotfiles はベースイメージから継承しています。ベース側を更新した場合は、ベースイメージとプロジェクトイメージを順にビルドし直してください。`localhost/wslc-dev-base:dev` は可変タグのため、これだけでは元のベースソースの版を特定できません。環境を固定して共有する場合は、ベースリポジトリのコミットを記録し、その版のイメージを用意して `make build-devcontainer BASE_IMAGE=<そのイメージ名>` を指定します。
+
+## Git のコミット名・メール
+
+Windows 側の `initializeCommand` で `git.exe config --get user.name` / `user.email`
+をプロジェクトのディレクトリで実行し、Git 対象外の
+`.windows-bridge/git-identity.config` に二項目だけ保存します。
+ホスト上で適用される `include` / `includeIf` も Windows Git が解決します。
+コンテナの作成時・接続時に `scripts/setup-git-identity.sh` が取り込み、
+`vscode` ユーザーのグローバル設定へ反映します。
+認証ヘルパーなどの既存設定は保持し、リポジトリ固有の `user.*` 設定があればそちらが優先されます。
+
+Windows 側の VS Code から `Reopen Folder Locally` → `Reopen in Container` で反映できます。
+ホスト側の名前・メールを変更した場合も開き直してください。
+ホストから取得できない項目は、既存のコンテナ設定を保持し、未設定なら
+ベースの `setup-git-identity` による `.env` の `GIT_USER_NAME` / `GIT_USER_EMAIL` を利用します。
+
+```bash
+git config --show-origin --get user.name
+git config --show-origin --get user.email
+```
+
+Windows Git が PATH にない場合は Dev Containers のログに警告を出します。
+この場合は Windows 側で Git を利用可能にするか、上記の `.env` の補完設定を使用してください。
 
 ## Git の接続確認
 
@@ -113,3 +198,16 @@ git pull --ff-only
 ```
 
 独立したリモートブランチとして公開する場合は、公開先を確認したうえで `git push -u origin HEAD` を使います。追跡設定は各チェックアウトの `.git/config` に保存され、リポジトリのファイルとしては共有されません。
+
+## Python 環境の初期化と再同期
+
+VS Code は `postCreateCommand` による依存の同期が完了してから接続します。
+コンテナ内の Python Environments の探索先は `.venv-linux` に設定しています。
+Windows 用の `.venv` や `.venv-win` は Linux では実行できません。
+コンテナ設定の変更は `Dev Containers: Rebuild Container` で反映してください。
+
+`scripts/setup-linux-venv.sh` は既存の環境を先に作り直さず、`uv sync` で
+作成・同期します。再試行時に既存のパッケージを先に消去するのを避けるためです。
+Linux 版 uv と `.venv-linux` は Codex の調査・静的検査・Linux 対応テスト用です。
+アプリ本体の実行・GUI デバッグ・Windows 固有機能の検証には Windows 版 uv と
+`.venv-win` を使用します。Linux 上の検査は Windows 上の動作確認を代替しません。

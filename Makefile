@@ -1,4 +1,4 @@
-wuv=/mnt/c/Users/katao/.local/bin/uv.exe
+WINDOWS_TASK = UV_PROJECT_ENVIRONMENT=.venv-linux uv run --no-project --python 3.11 python scripts/windows-client.py
 main_file_name=siren6_helper
 project_name=siren6_helper
 target=$(project_name)/.built  # timestampファイルにすることで連続でmakeできないように対策
@@ -20,7 +20,7 @@ $(target_zip): $(target)
 	$(ZIP) $(target_zip) $(project_name) $(ZIP_EXCLUDES)
 
 $(target): $(srcs) $(html_files) $(project_name).pyw version.txt
-	@$(wuv) run setup.py build
+	@$(WINDOWS_TASK) build
 
 # 	# Tcl/Tk関連
 # 	@rm -rf $(project_name)/share/tcl8.6/tzdata
@@ -48,8 +48,19 @@ clean:
 	@rm -rf $(target)
 	@rm -rf __pycache__
 
+.PHONY: test build windows-check windows-sync
+
+build:
+	@$(WINDOWS_TASK) build
+
+windows-check:
+	@$(WINDOWS_TASK) check
+
+windows-sync:
+	@$(WINDOWS_TASK) sync
+
 test:
-	@$(wuv) run python $(main_file_name).pyw
+	@$(WINDOWS_TASK) run
 
 DEVCONTAINER_IMAGE ?= localhost/siren6-helper-dev:dev
 BASE_IMAGE ?= localhost/wslc-dev-base:dev

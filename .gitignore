@@ -20,3 +20,6 @@ src/*.egg-info/*
 .env
 .env.*
 !.env.example
+
+# Local Windows task transport
+.windows-bridge/
