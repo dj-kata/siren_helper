@@ -723,14 +723,23 @@ class MainWindow(MainWindowUI):
         if not images:
             return None
 
-        count = len(images)
-        cols = math.ceil(math.sqrt(count))
-        rows = math.ceil(count / cols)
-        if count == 2:
-            cols, rows = 2, 1
-
         cell_width = max(image.width for image in images)
         cell_height = max(image.height for image in images)
+        count = len(images)
+        grid_candidates = []
+        for candidate_cols in range(1, count + 1):
+            candidate_rows = math.ceil(count / candidate_cols)
+            aspect_ratio = (
+                cell_width * candidate_cols
+                / (cell_height * candidate_rows)
+            )
+            grid_candidates.append((
+                abs(math.log(aspect_ratio)),
+                candidate_cols * candidate_rows - count,
+                candidate_cols,
+                candidate_rows,
+            ))
+        _score, _empty_cells, cols, rows = min(grid_candidates)
         canvas_width = cell_width * cols
         canvas_height = cell_height * rows
         max_side = 4096
@@ -2316,6 +2325,7 @@ class MainWindow(MainWindowUI):
 
             adventure_result = result.get("adventure_result")
             if adventure_result:
+                self.last_recognized_dungeon_floor = None
                 signature = adventure_result.label
                 if signature != self.last_auto_capture_result_signature:
                     self.save_auto_capture(screen, signature)
@@ -2371,6 +2381,7 @@ class MainWindow(MainWindowUI):
             return None, False
 
     def apply_detected_dungeon_floor(self, dungeon_key, floor, screen=None):
+        first_floor_recognition = self.last_recognized_dungeon_floor is None
         self.last_recognized_dungeon_floor = floor
         if dungeon_key not in MONSTER_FLOOR_DUNGEON_KEYS:
             dungeon_name = next(
@@ -2401,7 +2412,8 @@ class MainWindow(MainWindowUI):
             self.reset_identification()
 
         changed = False
-        if self.dungeon_combo.currentData() != dungeon_key:
+        dungeon_changed = self.dungeon_combo.currentData() != dungeon_key
+        if dungeon_changed:
             self.dungeon_combo.setCurrentIndex(dungeon_index)
             changed = True
 
@@ -2415,12 +2427,13 @@ class MainWindow(MainWindowUI):
 
         if changed:
             self.reset_monster_table_scrollbars()
-            if (
-                floor_changed
-                and self.auto_capture_enabled("floor_change")
-                and self.should_auto_capture_floor(floor)
-            ):
-                self.save_auto_capture(screen or self.latest_screen, self.format_floor_label(floor))
+
+        if (
+            (first_floor_recognition or dungeon_changed or floor_changed)
+            and self.auto_capture_enabled("floor_change")
+            and self.should_auto_capture_floor(floor)
+        ):
+            self.save_auto_capture(screen or self.latest_screen, self.format_floor_label(floor))
 
         if auto_reset:
             dungeon_name = self.dungeon_combo.currentText()
