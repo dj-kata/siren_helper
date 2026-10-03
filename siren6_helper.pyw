@@ -159,6 +159,8 @@ EQUIPMENT_PRICE_CORRECTION_MAX = 99
 EQUIPMENT_BUY_CORRECTION_UNIT = 100
 EQUIPMENT_SELL_CORRECTION_UNIT = 40
 SHOP_PRICE_HIDE_GRACE_SECONDS = 4.0
+ADVENTURE_RESULT_LATCH_GRACE_SECONDS = 10.0
+ADVENTURE_RESULT_MANUAL_SAVE_GRACE_SECONDS = 3.0
 MANPUKU_WARNING_SOUND_PATH = Path("data/sound/Warning-Siren04-02(Low-Long).mp3")
 ENTOU_STATUS_CLEAR_MISSES = 2
 ITEM_CATEGORY_LABELS = {
@@ -312,6 +314,8 @@ class MainWindow(MainWindowUI):
         self.last_live_mode_detect_time = 0.0
         self.live_mode_detect_interval = self.dungeon_ocr_interval
         self.last_auto_capture_result_signature = None
+        self.last_auto_capture_result_seen_time = 0.0
+        self.last_auto_capture_result_saved_time = 0.0
         self.shop_ocr_reader = ShopOcrReader(self.config)
         self.manpuku_ocr_reader = ManpukuOcrReader(self.config)
         self.status_ocr_reader = StatusOcrReader(self.config)
@@ -2084,6 +2088,14 @@ class MainWindow(MainWindowUI):
     def save_image(self):
         """F6押下時点のゲーム画面を保存する"""
         try:
+            if (
+                time.monotonic() - self.last_auto_capture_result_saved_time
+                < ADVENTURE_RESULT_MANUAL_SAVE_GRACE_SECONDS
+            ):
+                logger.info("リザルト自動キャプチャ直後の重複保存をスキップしました")
+                self.statusBar().showMessage("リザルト画像は自動保存済みです", 3000)
+                return False
+
             save_screen = None
             try:
                 save_screen = self.capture_game_screen()
@@ -2099,13 +2111,16 @@ class MainWindow(MainWindowUI):
                 self.statusBar().showMessage("保存できる画面がまだありません", 3000)
                 return False
 
-            floor = self.last_recognized_dungeon_floor
-            suffix = (
-                self.format_floor_label(floor)
-                if self.config.dungeon_ocr_enabled and isinstance(floor, int)
-                else None
-            )
+            suffix = self.last_auto_capture_result_signature
+            if not suffix:
+                floor = self.last_recognized_dungeon_floor
+                suffix = (
+                    self.format_floor_label(floor)
+                    if self.config.dungeon_ocr_enabled and isinstance(floor, int)
+                    else None
+                )
             filename = self.save_capture_screen(save_screen, suffix)
+            logger.info("手動キャプチャ保存: %s", filename)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
             return True
         except Exception as e:
@@ -2326,11 +2341,17 @@ class MainWindow(MainWindowUI):
             adventure_result = result.get("adventure_result")
             if adventure_result:
                 self.last_recognized_dungeon_floor = None
+                now = time.monotonic()
+                self.last_auto_capture_result_seen_time = now
                 signature = adventure_result.label
-                if signature != self.last_auto_capture_result_signature:
-                    self.save_auto_capture(screen, signature)
-                    self.last_auto_capture_result_signature = signature
-            else:
+                if self.last_auto_capture_result_signature is None:
+                    if self.save_auto_capture(screen, signature):
+                        self.last_auto_capture_result_signature = signature
+                        self.last_auto_capture_result_saved_time = now
+            elif (
+                time.monotonic() - self.last_auto_capture_result_seen_time
+                >= ADVENTURE_RESULT_LATCH_GRACE_SECONDS
+            ):
                 self.last_auto_capture_result_signature = None
 
             shop_result = result.get("shop_result")
