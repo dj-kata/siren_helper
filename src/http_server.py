@@ -10,7 +10,7 @@ import traceback
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from src.logger import get_logger
 
@@ -110,6 +110,19 @@ class BrowserHTTPServer:
                         self._send_json(provider.get_http_shop_price_data())
                     elif path == "/api/captures":
                         self._send_json(provider.get_http_capture_images_data())
+                    elif path == "/api/captures/tile-image":
+                        query = parse_qs(parsed.query)
+                        filenames = [item for item in query.get("files", []) if item]
+                        body = provider.generate_http_capture_tile_image(filenames)
+                        if body is None:
+                            self._send_error(HTTPStatus.NOT_FOUND, "image not found")
+                        else:
+                            self._send_body(
+                                HTTPStatus.OK,
+                                body,
+                                "image/jpeg",
+                                cache_control="no-store",
+                            )
                     elif path.startswith("/api/captures/files/"):
                         filename = path.removeprefix("/api/captures/files/")
                         image_path = provider.get_http_capture_image_path(filename)

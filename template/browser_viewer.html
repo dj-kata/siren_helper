@@ -61,6 +61,11 @@ button:disabled {
   color: #9aa4af;
   cursor: default;
 }
+button.danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #9f1239;
+}
 button.active, .tab-button.active {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -230,6 +235,7 @@ tr.even-price:not(.identified) td { background: #fffbe6; }
   display: contents;
 }
 .capture-item {
+  position: relative;
   display: grid;
   grid-template-rows: 130px auto;
   gap: 8px;
@@ -239,6 +245,28 @@ tr.even-price:not(.identified) td { background: #fffbe6; }
   background: #fff;
   color: var(--text);
   text-decoration: none;
+  cursor: pointer;
+}
+.capture-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.18);
+}
+.capture-select {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: none;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+}
+.capture-selection-mode .capture-select { display: inline-grid; place-items: center; }
+.capture-item.selected .capture-select {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 .capture-thumb {
   width: 100%;
@@ -257,6 +285,33 @@ tr.even-price:not(.identified) td { background: #fffbe6; }
   display: block;
   color: var(--muted);
   font-size: 12px;
+}
+.capture-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+.capture-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.capture-tag.floor { background: #dbeafe; color: #1e3a8a; }
+.capture-tag.clear { background: #dcfce7; color: #166534; }
+.capture-tag.failed { background: #fee2e2; color: #991b1b; }
+.capture-tag.mode { background: #ede9fe; color: #5b21b6; }
+.capture-tag.info { background: #e5e7eb; color: #374151; }
+.capture-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 .byoyon-layout {
   display: grid;
@@ -385,6 +440,11 @@ tr.even-price:not(.identified) td { background: #fffbe6; }
   <section id="captures" class="view">
     <div class="section-head">
       <h1>保存画像</h1>
+      <div class="capture-actions">
+        <button id="toggleCaptureSelectButton">複数選択</button>
+        <button id="combineCapturesButton" disabled>選択画像を生成</button>
+        <button id="clearCaptureSelectionButton" class="danger" disabled>選択解除</button>
+      </div>
       <span id="captureDirectory" class="muted"></span>
     </div>
     <div class="capture-layout">
@@ -426,6 +486,8 @@ let shopData = null;
 let captureData = null;
 let activeCategory = "kusa";
 let selectedItem = null;
+let captureSelectionMode = false;
+let selectedCaptureFilenames = new Set();
 let gridSize = 25;
 let walls = new Set();
 let candidates = [];
@@ -444,6 +506,9 @@ document.getElementById("sizeDownButton").addEventListener("click", () => resize
 document.getElementById("sizeUpButton").addEventListener("click", () => resizeGrid(1));
 document.getElementById("markIdentifiedButton").addEventListener("click", () => setSelectedItemIdentified(true));
 document.getElementById("markUnknownButton").addEventListener("click", () => setSelectedItemIdentified(false));
+document.getElementById("toggleCaptureSelectButton").addEventListener("click", toggleCaptureSelectionMode);
+document.getElementById("combineCapturesButton").addEventListener("click", openCaptureTileImage);
+document.getElementById("clearCaptureSelectionButton").addEventListener("click", clearCaptureSelection);
 document.getElementById("showShopCandidatesCheck").addEventListener("change", event => {
   browserSettings.showShopCandidates = event.target.checked;
   saveBrowserSettings();
@@ -718,7 +783,10 @@ function jumpToItem(category, name) {
 function renderCaptures() {
   if (!captureData) return;
   const files = captureData.files || [];
+  const filenames = new Set(files.map(file => file.filename));
+  selectedCaptureFilenames = new Set([...selectedCaptureFilenames].filter(filename => filenames.has(filename)));
   document.getElementById("captureDirectory").textContent = captureData.directory || "";
+  document.getElementById("captures").classList.toggle("capture-selection-mode", captureSelectionMode);
 
   const list = document.getElementById("captureList");
   list.innerHTML = "";
@@ -730,11 +798,27 @@ function renderCaptures() {
   } else {
     for (const file of files) {
       const url = `${file.url}?mtime=${encodeURIComponent(file.mtime)}`;
-      const link = document.createElement("a");
-      link.className = "capture-item";
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
+      const item = document.createElement("div");
+      const selected = selectedCaptureFilenames.has(file.filename);
+      item.className = `capture-item${selected ? " selected" : ""}`;
+      item.addEventListener("click", () => {
+        if (captureSelectionMode) {
+          toggleCaptureFile(file.filename);
+        } else {
+          window.open(url, "_blank", "noopener");
+        }
+      });
+
+      const select = document.createElement("button");
+      select.className = "capture-select";
+      select.type = "button";
+      select.textContent = selected ? "✓" : "";
+      select.title = selected ? "選択済み" : "選択";
+      select.addEventListener("click", event => {
+        event.stopPropagation();
+        toggleCaptureFile(file.filename);
+      });
+
       const image = document.createElement("img");
       image.className = "capture-thumb";
       image.src = url;
@@ -748,11 +832,69 @@ function renderCaptures() {
       const text = document.createElement("span");
       text.appendChild(name);
       text.appendChild(meta);
-      link.appendChild(image);
-      link.appendChild(text);
-      list.appendChild(link);
+      const tags = createCaptureTags(file.tags || []);
+      if (tags) text.appendChild(tags);
+      item.appendChild(select);
+      item.appendChild(image);
+      item.appendChild(text);
+      list.appendChild(item);
     }
   }
+  updateCaptureActions();
+}
+
+function createCaptureTags(tags) {
+  if (!tags.length) return null;
+  const wrap = document.createElement("span");
+  wrap.className = "capture-tags";
+  for (const tag of tags) {
+    const chip = document.createElement("span");
+    chip.className = `capture-tag ${tag.kind || "info"}`;
+    chip.textContent = tag.label || "";
+    wrap.appendChild(chip);
+  }
+  return wrap;
+}
+
+function toggleCaptureSelectionMode() {
+  captureSelectionMode = !captureSelectionMode;
+  if (!captureSelectionMode) selectedCaptureFilenames.clear();
+  renderCaptures();
+}
+
+function toggleCaptureFile(filename) {
+  captureSelectionMode = true;
+  if (selectedCaptureFilenames.has(filename)) {
+    selectedCaptureFilenames.delete(filename);
+  } else {
+    selectedCaptureFilenames.add(filename);
+  }
+  renderCaptures();
+}
+
+function clearCaptureSelection() {
+  selectedCaptureFilenames.clear();
+  renderCaptures();
+}
+
+function updateCaptureActions() {
+  const count = selectedCaptureFilenames.size;
+  const toggle = document.getElementById("toggleCaptureSelectButton");
+  const combine = document.getElementById("combineCapturesButton");
+  const clear = document.getElementById("clearCaptureSelectionButton");
+  toggle.classList.toggle("active", captureSelectionMode);
+  toggle.textContent = captureSelectionMode ? "選択終了" : "複数選択";
+  combine.disabled = count === 0;
+  combine.textContent = count ? `選択画像を生成 (${count})` : "選択画像を生成";
+  clear.disabled = count === 0;
+}
+
+function openCaptureTileImage() {
+  const filenames = [...selectedCaptureFilenames];
+  if (!filenames.length) return;
+  const params = new URLSearchParams();
+  filenames.forEach(filename => params.append("files", filename));
+  window.open(`/api/captures/tile-image?${params.toString()}`, "_blank", "noopener");
 }
 
 function formatBytes(value) {

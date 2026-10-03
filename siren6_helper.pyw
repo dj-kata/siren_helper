@@ -7,6 +7,7 @@ import asyncio
 import datetime
 import faulthandler
 import json
+import math
 import os
 import re
 import sys
@@ -14,6 +15,7 @@ import threading
 import traceback
 import time
 from difflib import SequenceMatcher
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -642,6 +644,7 @@ class MainWindow(MainWindowUI):
                         "size": stat.st_size,
                         "mtime": stat.st_mtime,
                         "mtime_text": datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+                        "tags": self.capture_image_tags(path.name),
                         "url": f"/api/captures/files/{quote(path.name)}",
                     })
         except Exception as e:
@@ -668,6 +671,89 @@ class MainWindow(MainWindowUI):
             return resolved_path
         except Exception:
             return None
+
+    def capture_image_tags(self, filename):
+        stem = Path(filename).stem
+        match = re.match(r"^siren6_capture_\d{8}_\d{6}(?:_(?P<suffix>.+))?$", stem)
+        if not match:
+            return []
+
+        suffix = match.group("suffix") or ""
+        if not suffix or re.fullmatch(r"\d+", suffix):
+            return []
+        if re.search(r"_.+_\d+$", f"_{suffix}"):
+            suffix = re.sub(r"_\d+$", "", suffix)
+
+        tags = []
+        if re.fullmatch(r"\d+F", suffix):
+            tags.append({"label": suffix, "kind": "floor"})
+        elif suffix == "clear":
+            tags.append({"label": "クリア", "kind": "clear"})
+        elif suffix.startswith("failed"):
+            tags.append({"label": "失敗", "kind": "failed"})
+            mode = suffix.removeprefix("failed").lstrip("_")
+            if mode:
+                tags.append({"label": mode, "kind": "mode"})
+        else:
+            tags.append({"label": suffix, "kind": "info"})
+        return tags
+
+    def generate_http_capture_tile_image(self, filenames):
+        capture_paths = []
+        seen = set()
+        for filename in filenames:
+            if not filename or filename in seen:
+                continue
+            seen.add(filename)
+            path = self.get_http_capture_image_path(filename)
+            if path is not None:
+                capture_paths.append(path)
+
+        if not capture_paths:
+            return None
+
+        images = []
+        for path in capture_paths:
+            try:
+                with Image.open(path) as image:
+                    images.append(image.convert("RGB"))
+            except Exception as e:
+                logger.warning(f"タイル画像用の保存画像読み込みに失敗しました: {path} {e}")
+        if not images:
+            return None
+
+        count = len(images)
+        cols = math.ceil(math.sqrt(count))
+        rows = math.ceil(count / cols)
+        if count == 2:
+            cols, rows = 2, 1
+
+        cell_width = max(image.width for image in images)
+        cell_height = max(image.height for image in images)
+        canvas_width = cell_width * cols
+        canvas_height = cell_height * rows
+        max_side = 4096
+        scale = min(1.0, max_side / max(canvas_width, canvas_height))
+        if scale < 1.0:
+            cell_width = max(1, int(cell_width * scale))
+            cell_height = max(1, int(cell_height * scale))
+            canvas_width = cell_width * cols
+            canvas_height = cell_height * rows
+
+        canvas = Image.new("RGB", (canvas_width, canvas_height), (0, 0, 0))
+        for index, image in enumerate(images):
+            ratio = min(cell_width / image.width, cell_height / image.height)
+            resized = image.resize(
+                (max(1, int(image.width * ratio)), max(1, int(image.height * ratio))),
+                Image.Resampling.LANCZOS,
+            )
+            x = (index % cols) * cell_width + (cell_width - resized.width) // 2
+            y = (index // cols) * cell_height + (cell_height - resized.height) // 2
+            canvas.paste(resized, (x, y))
+
+        output = BytesIO()
+        canvas.save(output, format="JPEG", quality=90, optimize=True)
+        return output.getvalue()
 
     def http_shop_candidate_history_payload(self):
         rows = []
