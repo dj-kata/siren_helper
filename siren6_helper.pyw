@@ -306,6 +306,7 @@ class MainWindow(MainWindowUI):
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.dungeon_ocr_reader = DungeonOcrReader(self.config)
         self.last_dungeon_ocr_time = 0.0
+        self.last_recognized_dungeon_floor = None
         self.dungeon_ocr_interval = 3.0
         self.last_live_mode = None
         self.last_live_mode_detect_time = 0.0
@@ -2089,7 +2090,13 @@ class MainWindow(MainWindowUI):
                 self.statusBar().showMessage("保存できる画面がまだありません", 3000)
                 return False
 
-            filename = self.save_capture_screen(save_screen)
+            floor = self.last_recognized_dungeon_floor
+            suffix = (
+                self.format_floor_label(floor)
+                if self.config.dungeon_ocr_enabled and isinstance(floor, int)
+                else None
+            )
+            filename = self.save_capture_screen(save_screen, suffix)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
             return True
         except Exception as e:
@@ -2364,6 +2371,7 @@ class MainWindow(MainWindowUI):
             return None, False
 
     def apply_detected_dungeon_floor(self, dungeon_key, floor, screen=None):
+        self.last_recognized_dungeon_floor = floor
         if dungeon_key not in MONSTER_FLOOR_DUNGEON_KEYS:
             dungeon_name = next(
                 (
