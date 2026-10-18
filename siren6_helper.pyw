@@ -702,6 +702,26 @@ class MainWindow(MainWindowUI):
         else:
             tags.append({"label": suffix, "kind": "info"})
         return tags
+    @staticmethod
+    def capture_image_sort_key(path):
+        try:
+            mtime_ns = path.stat().st_mtime_ns
+        except OSError:
+            mtime_ns = 0
+
+        match = re.match(r"^siren6_capture_(\d{8}_\d{6})", path.stem)
+        if match:
+            try:
+                captured_at = datetime.datetime.strptime(
+                    match.group(1),
+                    "%Y%m%d_%H%M%S",
+                )
+                captured_at_ns = int(captured_at.timestamp() * 1_000_000_000)
+                return captured_at_ns, mtime_ns, path.name
+            except ValueError:
+                pass
+        return mtime_ns, mtime_ns, path.name
+
 
     def generate_http_capture_tile_image(self, filenames):
         capture_paths = []
@@ -716,6 +736,7 @@ class MainWindow(MainWindowUI):
 
         if not capture_paths:
             return None
+        capture_paths.sort(key=self.capture_image_sort_key)
 
         images = []
         for path in capture_paths:
