@@ -10,11 +10,14 @@ CAPTURE_MODE_NONE = "none"
 CAPTURE_MODE_OBS = "obs"
 CAPTURE_MODE_DIRECT = "direct"
 CAPTURE_MODE_FULLSCREEN = "fullscreen"
+CAPTURE_MODE_SPOUT = "spout"
+DEFAULT_SPOUT_SENDER_NAME = "Spout_OBS_Filter"
 CAPTURE_MODES = (
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
     CAPTURE_MODE_DIRECT,
     CAPTURE_MODE_FULLSCREEN,
+    CAPTURE_MODE_SPOUT,
 )
 CAPTURE_RESOLUTION_FULLHD = "1920x1080"
 CAPTURE_RESOLUTION_HALFHD = "960x540"
@@ -64,6 +67,7 @@ class Config:
         # OBS WebSocket
         self.obs_enabled = False
         self.capture_mode = CAPTURE_MODE_NONE
+        self.spout_sender_name = DEFAULT_SPOUT_SENDER_NAME
         self.websocket_host = "localhost"
         self.websocket_port = 4444
         self.websocket_password = ""
@@ -129,6 +133,7 @@ class Config:
             if capture_mode not in CAPTURE_MODES:
                 capture_mode = CAPTURE_MODE_OBS if legacy_obs_enabled else CAPTURE_MODE_NONE
             self.capture_mode = capture_mode
+            self.spout_sender_name = str(config_data.get("spout_sender_name") or "").strip() or DEFAULT_SPOUT_SENDER_NAME
             self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
             self.websocket_host = config_data.get("websocket_host", self.websocket_host)
             self.websocket_port = config_data.get("websocket_port", self.websocket_port)
@@ -236,6 +241,7 @@ class Config:
         """設定ファイルに設定を保存する"""
         if self.capture_mode not in CAPTURE_MODES:
             self.capture_mode = CAPTURE_MODE_NONE
+        self.spout_sender_name = str(self.spout_sender_name or "").strip() or DEFAULT_SPOUT_SENDER_NAME
         if self.capture_resolution not in CAPTURE_RESOLUTIONS:
             self.capture_resolution = OCR_CAPTURE_RESOLUTION
         if self.image_save_format not in IMAGE_SAVE_FORMATS:
@@ -249,6 +255,7 @@ class Config:
         config_data = {
             "obs_enabled": self.obs_enabled,
             "capture_mode": self.capture_mode,
+            "spout_sender_name": self.spout_sender_name,
             "websocket_host": self.websocket_host,
             "websocket_port": self.websocket_port,
             "websocket_password": self.websocket_password,
@@ -309,6 +316,7 @@ class Config:
                 "websocket_port": self.websocket_port,
                 "obs_enabled": self.obs_enabled,
                 "capture_mode": self.capture_mode,
+                "spout_sender_name": self.spout_sender_name,
                 "capture_resolution": self.capture_resolution,
                 "monitor_source_name": self.monitor_source_name,
                 "obs_scene_collection": self.obs_scene_collection,

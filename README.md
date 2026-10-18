@@ -82,7 +82,12 @@ OBS上で本ツールの情報表示を行う場合は、
 
 文字認識を定期的に実行するため、PCへの負荷がやや大きくなります。価格識別が特に重いので、負荷状況と相談して無効にする/店にいるときのみonにするなど使い方を決めるとよいかと思います。
 
-Switch版の場合は[こちら](https://github.com/dj-kata/siren_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E5%88%A9%E7%94%A8%E6%96%B9%E6%B3%95)を参考にOBS WebSocket設定を行ってください。(かなり重いです)
+Spout経由で取得する場合は、OBSにSpout 2 OBS Pluginを導入し、ゲーム映像のソースにSpout Filterを追加してください。
+本アプリの設定で`ゲーム画面取得方法`を`Spout経由`にし、`Spoutフィルタ送信名`をOBSのSpout Filterに設定した送信名と一致させてください（初期値: `Spout_OBS_Filter`）。
+`OK`を押すと受信設定が反映されます。Spout経由の画面取得にはOBS WebSocketの接続設定は不要です。Steam版・Switch版のどちらでも、OBSで取り込んだゲーム画面を利用できます。
+接続状態は画面下部に表示され、送信待ちやエラーの詳細はマウスを重ねると確認できます。
+
+OBS WebSocket経由で取得する場合は[こちら](https://github.com/dj-kata/siren_helper/wiki/OBS%E9%80%A3%E6%90%BA%E6%A9%9F%E8%83%BD%E5%88%A9%E7%94%A8%E6%96%B9%E6%B3%95)を参考にOBS WebSocket設定を行ってください。(かなり重いです)
 
 店内での価格取得について、アイテム欄選択ではなく、以下のようにアイテムの上に乗っている場合にのみ動作します。
 <img width="960" alt="Image" src="https://github.com/user-attachments/assets/da7d4e4e-10b8-4da5-9327-358b0fd0e0a0" />  

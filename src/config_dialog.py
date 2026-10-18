@@ -32,6 +32,7 @@ from src.config import (
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_NONE,
     CAPTURE_MODE_OBS,
+    CAPTURE_MODE_SPOUT,
     AUTO_CAPTURE_FLOOR_INTERVAL_10,
     AUTO_CAPTURE_FLOOR_INTERVAL_25,
     AUTO_CAPTURE_FLOOR_INTERVAL_5,
@@ -166,7 +167,13 @@ class ConfigDialog(QDialog):
             self.ui.feature.capture_mode_fullscreen,
             CAPTURE_MODE_FULLSCREEN,
         )
+        self.capture_mode_combo.addItem(self.ui.feature.capture_mode_spout, CAPTURE_MODE_SPOUT)
         dosukoi_form.addRow(self.ui.feature.capture_mode, self.capture_mode_combo)
+        self.spout_sender_edit = QLineEdit()
+        self.spout_sender_edit.setPlaceholderText("Spout_OBS_Filter")
+        self.spout_sender_edit.setToolTip(self.ui.feature.spout_sender_tip)
+        dosukoi_form.addRow(self.ui.feature.spout_sender, self.spout_sender_edit)
+        self.capture_mode_combo.currentIndexChanged.connect(self.update_spout_controls)
 
         self.obs_capture_interval_spin = QDoubleSpinBox()
         self.obs_capture_interval_spin.setRange(1.0, 30.0)
@@ -254,6 +261,8 @@ class ConfigDialog(QDialog):
         self.load_http_server_interfaces()
         index = self.capture_mode_combo.findData(self.config.capture_mode)
         self.capture_mode_combo.setCurrentIndex(index if index >= 0 else 0)
+        self.spout_sender_edit.setText(self.config.spout_sender_name)
+        self.update_spout_controls()
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
         self.debug_mode_check.setChecked(self.config.debug_mode)
@@ -266,6 +275,9 @@ class ConfigDialog(QDialog):
         self.entou_alert_enabled_check.setChecked(self.config.entou_alert_enabled)
         self.main_font_size_spin.setValue(self.config.main_font_size)
         self.update_auto_capture_controls()
+
+    def update_spout_controls(self, *_args):
+        self.spout_sender_edit.setEnabled(self.capture_mode_combo.currentData() == CAPTURE_MODE_SPOUT)
 
     def accept(self):
         self.config.image_save_path = self.image_save_path_edit.text().strip() or "captures"
@@ -297,6 +309,7 @@ class ConfigDialog(QDialog):
         self.config.http_server_interface = self.http_server_interface_combo.currentData() or ""
 
         self.config.capture_mode = self.capture_mode_combo.currentData() or CAPTURE_MODE_NONE
+        self.config.spout_sender_name = self.spout_sender_edit.text().strip() or "Spout_OBS_Filter"
         self.config.obs_enabled = self.config.capture_mode == CAPTURE_MODE_OBS
         self.config.obs_capture_interval_seconds = self.obs_capture_interval_spin.value()
         self.config.keep_on_top = self.keep_on_top_check.isChecked()

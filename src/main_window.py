@@ -40,7 +40,7 @@ except ImportError:
 
 from src.funcs import load_ui_text
 from src.logger import get_logger
-from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_FULLSCREEN, CAPTURE_MODE_OBS
+from src.config import CAPTURE_MODE_DIRECT, CAPTURE_MODE_FULLSCREEN, CAPTURE_MODE_OBS, CAPTURE_MODE_SPOUT
 from src.byoyon_wall import GRID_SIZE
 from src.item import (
     DUNGEON_ITEM_FLAG_CATEGORIES,
@@ -133,12 +133,22 @@ class MainWindowUI(QMainWindow):
         self.statusBar().showMessage(self.ui.main.status_ready)
 
     def update_obs_status_label(self, is_connected: bool):
+        self.obs_status_label.setTextFormat(Qt.PlainText)
+        self.obs_status_label.setToolTip("")
         if self.config.capture_mode == CAPTURE_MODE_OBS:
             status = (
                 self.ui.obs.connected if is_connected else self.ui.obs.not_connected
             )
             color = "green" if is_connected else "red"
             self.obs_status_label.setText(f"OBS: {status}")
+        elif self.config.capture_mode == CAPTURE_MODE_SPOUT:
+            receiver = getattr(self, "spout_capture", None)
+            status = receiver.current_status() if receiver else None
+            ready = receiver is not None and receiver.get_latest_frame() is not None
+            color = "green" if ready else "red" if status and status[0] == "error" else "gray"
+            text = self.ui.obs.connected if ready else self.ui.obs.not_connected
+            self.obs_status_label.setText(f"Spout: {text} ({self.config.spout_sender_name})")
+            self.obs_status_label.setToolTip(status[1] if status else "")
         elif self.config.capture_mode == CAPTURE_MODE_DIRECT:
             color = "green"
             self.obs_status_label.setText(

@@ -73,6 +73,7 @@ from src.config import (
     CAPTURE_MODE_DIRECT,
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
+    CAPTURE_MODE_SPOUT,
     AUTO_CAPTURE_FLOOR_INTERVAL_10,
     AUTO_CAPTURE_FLOOR_INTERVAL_25,
     AUTO_CAPTURE_FLOOR_INTERVAL_5,
@@ -93,6 +94,7 @@ from src.fullscreen_capture import (
     capture_shiren_dxgi,
 )
 startup_trace("imported src.fullscreen_capture")
+from src.spout_capture import SpoutCapture
 from src.http_server import BrowserHTTPServer
 startup_trace("imported src.http_server")
 from src.dungeon_ocr import DungeonOcrReader
@@ -294,6 +296,7 @@ class MainWindow(MainWindowUI):
         self.dungeon_ocr_targets = self.load_dungeon_filters(include_disabled=True)
         self.selected_dungeon_key = self.default_dungeon_key()
 
+        self.spout_capture = SpoutCapture()
         self.obs_manager = OBSWebSocketManager()
         self.obs_manager.set_config(self.config)
         self.obs_manager.connection_changed.connect(self.on_obs_connection_changed)
@@ -363,6 +366,7 @@ class MainWindow(MainWindowUI):
         self.init_identification_ui()
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
 
+        self.update_spout_capture()
         if self.config.capture_mode == CAPTURE_MODE_OBS:
             QTimer.singleShot(0, self.start_obs_connection)
         else:
@@ -507,12 +511,19 @@ class MainWindow(MainWindowUI):
             if dialog_accepted and self.config.capture_mode == CAPTURE_MODE_OBS:
                 QTimer.singleShot(250, self.connect_obs_after_dialog)
 
+    def update_spout_capture(self):
+        if self.config.capture_mode == CAPTURE_MODE_SPOUT:
+            self.spout_capture.start(self.config.spout_sender_name)
+        else:
+            self.spout_capture.stop()
+
     def update_all_configs(self, connect_obs: bool = True):
         old_port = self.config.websocket_data_port
         old_capture_mode = self.config.capture_mode
         old_http_signature = self.http_server_config_signature
         self.config.load_config()
         self.obs_manager.set_config(self.config)
+        self.update_spout_capture()
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.apply_manpuku_warning_volume()
         if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
@@ -2229,6 +2240,7 @@ class MainWindow(MainWindowUI):
                 CAPTURE_MODE_OBS,
                 CAPTURE_MODE_DIRECT,
                 CAPTURE_MODE_FULLSCREEN,
+                CAPTURE_MODE_SPOUT,
             ):
                 self.capture_status = self.ui.main.waiting_capture
                 return
@@ -2332,6 +2344,9 @@ class MainWindow(MainWindowUI):
             if self.config.capture_mode == CAPTURE_MODE_OBS:
                 self.obs_manager.screenshot()
                 return self.obs_manager.screen
+            if self.config.capture_mode == CAPTURE_MODE_SPOUT:
+                frame = self.spout_capture.get_latest_frame()
+                return Image.fromarray(frame) if frame is not None else None
             if self.config.capture_mode == CAPTURE_MODE_DIRECT:
                 return capture_shiren_window(OCR_CAPTURE_SIZE)
             if self.config.capture_mode == CAPTURE_MODE_FULLSCREEN:
@@ -3491,6 +3506,7 @@ class MainWindow(MainWindowUI):
         self.remove_global_hotkeys()
         self.main_timer.stop()
         self.display_timer.stop()
+        self.spout_capture.stop()
         if self.capture_worker and self.capture_worker.is_alive():
             self.capture_worker.join(timeout=3.0)
         if self.config.obs_enabled:

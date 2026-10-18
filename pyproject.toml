@@ -18,4 +18,5 @@ dependencies = [
     "paddleocr>=3.5.0",
     "cx-freeze>=8.6.4",
     "dxcam>=0.0.5; platform_system == 'Windows'",
+    "spoutgl>=0.1.1; sys_platform == 'win32'",
 ]
