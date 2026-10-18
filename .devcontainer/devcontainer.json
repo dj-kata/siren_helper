@@ -46,7 +46,8 @@
   ],
   "containerEnv": {
     "CODEX_HOME": "/home/vscode/.codex",
-    "UV_PROJECT_ENVIRONMENT": ".venv-linux"
+    "UV_PROJECT_ENVIRONMENT": ".venv-linux",
+    "WINDOWS_TRANSPORT": "bridge"
   },
   "containerUser": "root"
 }

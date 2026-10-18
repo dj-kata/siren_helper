@@ -1,4 +1,23 @@
+WINDOWS_UV ?= /mnt/c/Users/katao/.local/bin/uv.exe
+WINDOWS_TRANSPORT ?= direct
+
+ifeq ($(WINDOWS_TRANSPORT),bridge)
 WINDOWS_TASK = UV_PROJECT_ENVIRONMENT=.venv-linux uv run --no-project --python 3.11 python scripts/windows-client.py
+WINDOWS_BUILD = $(WINDOWS_TASK) build
+WINDOWS_RUN = $(WINDOWS_TASK) run
+WINDOWS_CHECK = $(WINDOWS_TASK) check
+WINDOWS_SYNC = $(WINDOWS_TASK) sync
+else ifeq ($(WINDOWS_TRANSPORT),direct)
+# WSLからWindowsへ環境変数を渡し、Windows用venvを明示する。
+WINDOWS_UV_COMMAND = env UV_PROJECT_ENVIRONMENT=.venv-win VIRTUAL_ENV= WSLENV="UV_PROJECT_ENVIRONMENT:VIRTUAL_ENV:$(WSLENV)" "$(WINDOWS_UV)"
+WINDOWS_BUILD = $(WINDOWS_UV_COMMAND) run python setup.py build
+WINDOWS_RUN = $(WINDOWS_UV_COMMAND) run python siren6_helper.pyw
+WINDOWS_CHECK = $(WINDOWS_UV_COMMAND) --version
+WINDOWS_SYNC = $(WINDOWS_UV_COMMAND) sync
+else
+$(error WINDOWS_TRANSPORT must be direct or bridge)
+endif
+
 main_file_name=siren6_helper
 project_name=siren6_helper
 target=$(project_name)/.built  # timestampファイルにすることで連続でmakeできないように対策
@@ -20,7 +39,7 @@ $(target_zip): $(target)
 	$(ZIP) $(target_zip) $(project_name) $(ZIP_EXCLUDES)
 
 $(target): $(srcs) $(html_files) $(project_name).pyw version.txt
-	@$(WINDOWS_TASK) build
+	@$(WINDOWS_BUILD)
 
 # 	# Tcl/Tk関連
 # 	@rm -rf $(project_name)/share/tcl8.6/tzdata
@@ -51,16 +70,16 @@ clean:
 .PHONY: test build windows-check windows-sync
 
 build:
-	@$(WINDOWS_TASK) build
+	@$(WINDOWS_BUILD)
 
 windows-check:
-	@$(WINDOWS_TASK) check
+	@$(WINDOWS_CHECK)
 
 windows-sync:
-	@$(WINDOWS_TASK) sync
+	@$(WINDOWS_SYNC)
 
 test:
-	@$(WINDOWS_TASK) run
+	@$(WINDOWS_RUN)
 
 DEVCONTAINER_IMAGE ?= localhost/siren6-helper-dev:dev
 BASE_IMAGE ?= localhost/wslc-dev-base:dev

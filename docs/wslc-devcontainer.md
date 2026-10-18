@@ -66,7 +66,17 @@ Dev Container 作成時に `.venv-linux` が作成されます。
 scripts/setup-linux-venv.sh
 ```
 
+## 通常の WSL から Windows で実行・ビルドする
+
+通常の WSL では `make` / `make build` / `make test` は Windows 版 uv を直接呼びます。
+Windows 側の待受は不要で、仮想環境には `.venv-win` を使います。
+uv の場所を変更する場合は `make WINDOWS_UV=/mnt/c/Users/.../.local/bin/uv.exe` のように指定してください。
+
 ## コンテナから Windows で実行・ビルドする
+
+Dev Containers の `containerEnv` で `WINDOWS_TRANSPORT=bridge` を設定し、
+コンテナ内だけ Windows 側の待受経由に切り替えます。
+既存コンテナに設定を反映するまでは `make WINDOWS_TRANSPORT=bridge` のように明示できます。
 
 通常の WSL と異なり、この WSLc コンテナには `/mnt/c` や Windows exe の
 相互運用機構がありません。`uv.exe` のマウントだけでは実行できません。
