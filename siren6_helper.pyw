@@ -196,8 +196,11 @@ SHOP_CATEGORY_HINTS = {
     "刀": "buki",
     "盾": "tate",
 }
-DISABLED_DUNGEON_KEYS = {"chinmoku_shinzui"}
-MONSTER_FLOOR_DUNGEON_KEYS = {"toguro_shinzui", "cho_shinzui"}
+DISABLED_DUNGEON_KEYS = set()
+MONSTER_FLOOR_DUNGEON_KEYS = {
+    "toguro_shinzui", "chinmoku_shinzui", "cho_shinzui",
+    "chihen_gakusha", "inishie_cave", "furai_kaido", "floral_garden",
+}
 INVALID_ICON_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]+')
 ICON_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
 CAPTURE_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
@@ -963,7 +966,10 @@ class MainWindow(MainWindowUI):
         if not dungeon_dir.exists():
             return []
 
-        preferred_order = ["toguro_shinzui", "chinmoku_shinzui", "cho_shinzui"]
+        preferred_order = [
+            "toguro_shinzui", "chinmoku_shinzui", "cho_shinzui",
+            "chihen_gakusha", "inishie_cave", "furai_kaido", "floral_garden",
+        ]
         reverse_categories = {
             json_key: category
             for category, json_key in ItemList.category_json_keys.items()

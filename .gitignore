@@ -12,6 +12,7 @@ captures/*
 .venv-win/*
 src/*.egg-info/*
 *.json
+!data/6_dungeons/*.json
 *.xml
 !.devcontainer/devcontainer.json
 !.vscode/settings.json
