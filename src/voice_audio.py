@@ -85,6 +85,7 @@ class _PlaybackThread(QThread):
         sink = None
         timeout = None
         state_timer = None
+        playback_started = False
         try:
             pcm, audio_format = wav_pcm(self.wav)
             pcm, audio_format = apply_pan(pcm, audio_format, self.pan)
@@ -101,7 +102,17 @@ class _PlaybackThread(QThread):
             sink.setVolume(max(0, min(100, self.volume)) / 100)
 
             def check_state():
-                if sink.state() in (QtAudio.State.IdleState, QtAudio.State.StoppedState):
+                nonlocal playback_started
+                state = sink.state()
+                if state in (QtAudio.State.ActiveState, QtAudio.State.SuspendedState):
+                    playback_started = True
+                elif state == QtAudio.State.IdleState and (
+                    playback_started or sink.processedUSecs() > 0
+                ):
+                    loop.quit()
+                elif state == QtAudio.State.StoppedState and (
+                    playback_started or sink.error() != QtAudio.Error.NoError
+                ):
                     loop.quit()
 
             state_timer = QTimer()
@@ -113,13 +124,14 @@ class _PlaybackThread(QThread):
             duration_ms = audio_format.durationForBytes(len(pcm)) // 1000
             timeout.start(int(duration_ms + 5000))
             sink.start(buffer)
-            if sink.state() in (QtAudio.State.ActiveState, QtAudio.State.SuspendedState):
-                state_timer.start()
-                loop.exec()
+            state_timer.start()
+            loop.exec()
             if not timeout.isActive():
-                raise RuntimeError("音声再生がタイムアウトしました")
+                raise RuntimeError("音声出力デバイスで再生を開始できませんでした")
             if sink.error() != QtAudio.Error.NoError:
                 raise RuntimeError(f"音声再生に失敗しました: {sink.error()}")
+            if not playback_started and sink.processedUSecs() <= 0:
+                raise RuntimeError("音声出力デバイスで再生を開始できませんでした")
         except Exception as error:
             self.failure = error.with_traceback(None)
         finally:

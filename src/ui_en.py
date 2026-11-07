@@ -130,6 +130,8 @@ class UIText:
         basic_group = 'VOICEVOX Settings'
         items_group = 'Announcements'
         test = 'Test playback'
+        test_failed_title = 'VOICEVOX test playback error'
+        test_failed = 'Could not play the test voice.\n\n{error}'
         url = 'VOICEVOX engine URL:'
         speaker = 'Voice style ID:'
         output_device = 'Playback device:'

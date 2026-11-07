@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QRadioButton,
     QSpinBox,
@@ -338,6 +339,15 @@ class ConfigDialog(QDialog):
         if self.voice_test_worker is not None and not self.voice_test_worker.is_alive():
             self.voice_test_timer.stop()
             self.voice_test_button.setEnabled(True)
+            if self.voice_test_worker.failure:
+                QMessageBox.warning(
+                    self,
+                    self.ui.voice.test_failed_title,
+                    self.ui.voice.test_failed.format(
+                        error=self.voice_test_worker.failure
+                    ),
+                )
+            self.voice_test_worker = None
 
     def update_auto_capture_controls(self):
         dungeon_ocr_enabled = self.dungeon_ocr_enabled_check.isChecked()

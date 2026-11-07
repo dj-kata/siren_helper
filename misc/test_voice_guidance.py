@@ -14,7 +14,11 @@ import numpy as np
 
 from src.config import ALERT_OUTPUT_VOICEVOX, Config
 from src.voice_audio import apply_pan, wav_pcm
-from src.voice_guidance import VoiceGuidance, shop_price_announcement
+from src.voice_guidance import (
+    VoiceGuidance,
+    shop_price_announcement,
+    start_voice_preview,
+)
 
 
 def wav_data(samples=(1000, -1000), channels=1):
@@ -96,6 +100,15 @@ class VoiceGuidanceTest(unittest.TestCase):
         time.sleep(0.15)
         guidance.shutdown()
         synthesize.assert_not_called()
+
+    @patch("src.voice_guidance.play_wav", side_effect=RuntimeError("device error"))
+    @patch("src.voice_guidance.synthesize", return_value=b"wav")
+    def test_preview_exposes_playback_failure(self, _synthesize, _play_wav):
+        worker = start_voice_preview("http://127.0.0.1:50021", 1)
+        worker.join(timeout=2)
+
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(worker.failure, "device error")
 
 
 class VoiceConfigTest(unittest.TestCase):

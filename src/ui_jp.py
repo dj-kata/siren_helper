@@ -130,6 +130,8 @@ class UIText:
         basic_group = 'VOICEVOX設定'
         items_group = '音声案内する場面'
         test = 'テスト再生'
+        test_failed_title = 'VOICEVOXテスト再生エラー'
+        test_failed = 'テスト音声を再生できませんでした。\n\n{error}'
         url = 'VOICEVOX接続先URL:'
         speaker = '音声のスタイルID:'
         output_device = '再生先デバイス:'

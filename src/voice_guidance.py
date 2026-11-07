@@ -41,16 +41,29 @@ def synthesize(text, url, speaker):
         return response.read()
 
 
-def start_voice_preview(url, speaker, device_id="", volume=100, pan=0):
-    def run():
+class VoicePreviewThread(threading.Thread):
+    def __init__(self, url, speaker, device_id, volume, pan):
+        super().__init__(name="voice-preview", daemon=True)
+        self.url = url
+        self.speaker = speaker
+        self.device_id = device_id
+        self.volume = volume
+        self.pan = pan
+        self.failure = None
+
+    def run(self):
         try:
-            play_wav(synthesize(VOICE_TEST_MESSAGE, url, speaker), device_id, volume, pan)
-        except Exception:
+            wav = synthesize(VOICE_TEST_MESSAGE, self.url, self.speaker)
+            play_wav(wav, self.device_id, self.volume, self.pan)
+        except Exception as error:
+            self.failure = str(error) or type(error).__name__
             logger.exception(
                 "VOICEVOXテスト再生に失敗しました（VOICEVOXの起動と設定を確認してください）"
             )
 
-    worker = threading.Thread(target=run, name="voice-preview", daemon=True)
+
+def start_voice_preview(url, speaker, device_id="", volume=100, pan=0):
+    worker = VoicePreviewThread(url, speaker, device_id, volume, pan)
     worker.start()
     return worker
 
