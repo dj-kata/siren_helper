@@ -57,6 +57,7 @@ class UIText:
     class tab:
         """Settings dialog tabs"""
         feature = 'Features'
+        overlay = 'Overlay'
         voicevox = 'VOICEVOX Integration'
         music_pack = 'Music Packs'
         image_save = 'Image Saving'
@@ -115,6 +116,15 @@ class UIText:
         alert_output = 'Alert output:'
         alert_output_sound = 'Warning sound'
         alert_output_voicevox = 'VOICEVOX'
+
+    class overlay:
+        basic_group = 'Basic Settings'
+        items_group = 'Visible Parts'
+        enable = 'Enable game window overlay'
+        monsters = 'Monsters for two floors'
+        shop_price = 'Price-identification candidates'
+        alerts = 'Dosukoi and Throwing alert banners'
+        help = 'Displays click-through panels over the game window. Part selections are preserved while the overlay is disabled, and saved settings apply immediately.'
 
     class voice:
         basic_group = 'VOICEVOX Settings'

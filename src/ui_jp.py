@@ -57,6 +57,7 @@ class UIText:
     class tab:
         """設定ダイアログのタブ"""
         feature = '機能設定'
+        overlay = 'オーバーレイ'
         voicevox = 'VOICEVOX連携'
         music_pack = '楽曲パック'
         image_save = '画像保存'
@@ -115,6 +116,15 @@ class UIText:
         alert_output = 'アラートの出力先:'
         alert_output_sound = '警告音'
         alert_output_voicevox = 'VOICEVOX'
+
+    class overlay:
+        basic_group = '基本設定'
+        items_group = '表示するパーツ'
+        enable = 'ゲーム画面へのオーバーレイを有効にする'
+        monsters = '2フロア分のモンスター一覧'
+        shop_price = '価格識別候補'
+        alerts = 'ドスコイ・遠投時の警告帯'
+        help = 'ゲームウィンドウ上にクリック透過の小型表示を重ねます。全体を無効にしても各パーツの選択は保持され、設定保存後すぐに反映されます。'
 
     class voice:
         basic_group = 'VOICEVOX設定'

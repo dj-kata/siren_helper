@@ -96,6 +96,8 @@ from src.fullscreen_capture import (
     capture_shiren_dxgi,
 )
 startup_trace("imported src.fullscreen_capture")
+from src.game_overlay import GameOverlay
+startup_trace("imported src.game_overlay")
 from src.spout_capture import SpoutCapture
 from src.http_server import BrowserHTTPServer
 startup_trace("imported src.http_server")
@@ -366,6 +368,7 @@ class MainWindow(MainWindowUI):
         self.http_server = None
         self.http_server_config_signature = None
         self.voice_guidance = VoiceGuidance(self.config)
+        self.game_overlay = GameOverlay(self.config)
         self.http_action_requested.connect(self.handle_http_action)
         self.start_websocket_server()
         self.start_http_server_if_enabled()
@@ -389,6 +392,7 @@ class MainWindow(MainWindowUI):
 
         self.display_timer = QTimer()
         self.display_timer.timeout.connect(self.update_display)
+        self.display_timer.timeout.connect(self.update_game_overlay)
         self.display_timer.start(500)
 
         self.global_hotkey_pressed.connect(self.handle_global_hotkey)
@@ -534,6 +538,7 @@ class MainWindow(MainWindowUI):
         old_alert_output = self.config.alert_output
         self.config.load_config()
         self.voice_guidance.set_config(self.config)
+        self.game_overlay.set_config(self.config)
         self.obs_manager.set_config(self.config)
         self.update_spout_capture()
         self.capture_interval = self.config.obs_capture_interval_seconds
@@ -565,10 +570,37 @@ class MainWindow(MainWindowUI):
                 self.obs_manager.disconnect()
             self.update_obs_status_label(False)
             self.capture_status = self.ui.main.waiting_capture
+            self.update_game_overlay()
             return
 
         if connect_obs and not self.obs_manager.is_connected:
             self.obs_manager.connect()
+
+        self.update_game_overlay()
+
+    def update_game_overlay(self):
+        capture_ready = bool(
+            self.latest_screen is not None
+            and self.capture_status == self.ui.main.capture_ok
+        )
+        self.game_overlay.update(
+            self.last_live_mode,
+            self.current_monster_floor_payload(),
+            self.latest_shop_price_data,
+            self.current_game_overlay_alert_messages(),
+            capture_ready=capture_ready,
+        )
+
+    def current_game_overlay_alert_messages(self):
+        if not self.manpuku_warning_active:
+            return ()
+        status = self.manpuku_warning_status_message
+        messages = []
+        if "ドスコイ" in status:
+            messages.append("満腹度が減少しています")
+        if "遠投" in status:
+            messages.append("遠投状態です")
+        return tuple(messages)
 
     def get_http_items_data(self):
         categories = []
@@ -2784,6 +2816,7 @@ class MainWindow(MainWindowUI):
             self.manpuku_warning_active = True
             return
         if not self.manpuku_warning_sound:
+            self.manpuku_warning_active = True
             if not self.manpuku_warning_sound_error_logged:
                 logger.warning("満腹度警告音を再生できません。音声ファイル未設定です。")
                 self.manpuku_warning_sound_error_logged = True
@@ -3562,6 +3595,7 @@ class MainWindow(MainWindowUI):
         self.execute_obs_triggers("app_end")
         self.stop_manpuku_warning()
         self.voice_guidance.shutdown()
+        self.game_overlay.close()
         self.remove_global_hotkeys()
         self.main_timer.stop()
         self.display_timer.stop()

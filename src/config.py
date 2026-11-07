@@ -84,6 +84,10 @@ class Config:
         self.main_window_height = 500
         self.keep_on_top = False
         self.main_font_size = 12
+        self.game_overlay_enabled = False
+        self.game_overlay_monsters_enabled = True
+        self.game_overlay_shop_price_enabled = True
+        self.game_overlay_alerts_enabled = True
 
         # OBS自動制御
         self.obs_control_settings = []
@@ -146,6 +150,27 @@ class Config:
             self.websocket_port = config_data.get("websocket_port", self.websocket_port)
             self.websocket_password = config_data.get("websocket_password", self.websocket_password)
             self.keep_on_top = config_data.get("keep_on_top", self.keep_on_top)
+            self.game_overlay_enabled = bool(
+                config_data.get("game_overlay_enabled", self.game_overlay_enabled)
+            )
+            self.game_overlay_monsters_enabled = bool(
+                config_data.get(
+                    "game_overlay_monsters_enabled",
+                    self.game_overlay_monsters_enabled,
+                )
+            )
+            self.game_overlay_shop_price_enabled = bool(
+                config_data.get(
+                    "game_overlay_shop_price_enabled",
+                    self.game_overlay_shop_price_enabled,
+                )
+            )
+            self.game_overlay_alerts_enabled = bool(
+                config_data.get(
+                    "game_overlay_alerts_enabled",
+                    self.game_overlay_alerts_enabled,
+                )
+            )
             self.main_window_geometry = config_data.get("main_window_geometry", self.main_window_geometry)
             self.main_font_size = clamp_int(
                 config_data.get("main_font_size", self.main_font_size),
@@ -310,6 +335,10 @@ class Config:
             "websocket_port": self.websocket_port,
             "websocket_password": self.websocket_password,
             "keep_on_top": self.keep_on_top,
+            "game_overlay_enabled": self.game_overlay_enabled,
+            "game_overlay_monsters_enabled": self.game_overlay_monsters_enabled,
+            "game_overlay_shop_price_enabled": self.game_overlay_shop_price_enabled,
+            "game_overlay_alerts_enabled": self.game_overlay_alerts_enabled,
             "main_window_geometry": self.main_window_geometry,
             "main_font_size": self.main_font_size,
             "window": {

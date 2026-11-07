@@ -73,6 +73,7 @@ class ConfigDialog(QDialog):
 
         tab_widget = QTabWidget()
         tab_widget.addTab(self.create_general_tab(), self.ui.tab.feature)
+        tab_widget.addTab(self.create_overlay_tab(), self.ui.tab.overlay)
         tab_widget.addTab(self.create_voicevox_tab(), self.ui.tab.voicevox)
         layout.addWidget(tab_widget)
 
@@ -231,6 +232,35 @@ class ConfigDialog(QDialog):
         layout.addStretch()
         return widget
 
+    def create_overlay_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        basic_group = QGroupBox(self.ui.overlay.basic_group)
+        basic_layout = QVBoxLayout(basic_group)
+        self.game_overlay_enabled_check = QCheckBox(self.ui.overlay.enable)
+        basic_layout.addWidget(self.game_overlay_enabled_check)
+        layout.addWidget(basic_group)
+
+        self.game_overlay_items_group = QGroupBox(self.ui.overlay.items_group)
+        items_layout = QVBoxLayout(self.game_overlay_items_group)
+        self.game_overlay_item_checks = {}
+        for key in ("monsters", "shop_price", "alerts"):
+            check = QCheckBox(getattr(self.ui.overlay, key))
+            self.game_overlay_item_checks[key] = check
+            items_layout.addWidget(check)
+        layout.addWidget(self.game_overlay_items_group)
+
+        help_label = QLabel(self.ui.overlay.help)
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        layout.addStretch()
+
+        self.game_overlay_enabled_check.toggled.connect(
+            self.game_overlay_items_group.setEnabled
+        )
+        return widget
+
     def create_voicevox_tab(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
@@ -361,6 +391,16 @@ class ConfigDialog(QDialog):
         self.update_spout_controls()
         self.obs_capture_interval_spin.setValue(self.config.obs_capture_interval_seconds)
         self.keep_on_top_check.setChecked(self.config.keep_on_top)
+        self.game_overlay_enabled_check.setChecked(
+            self.config.game_overlay_enabled
+        )
+        for key, check in self.game_overlay_item_checks.items():
+            check.setChecked(
+                bool(getattr(self.config, f"game_overlay_{key}_enabled"))
+            )
+        self.game_overlay_items_group.setEnabled(
+            self.game_overlay_enabled_check.isChecked()
+        )
         self.debug_mode_check.setChecked(self.config.debug_mode)
         self.dungeon_ocr_enabled_check.setChecked(self.config.dungeon_ocr_enabled)
         self.shop_ocr_enabled_check.setChecked(self.config.shop_ocr_enabled)
@@ -433,6 +473,15 @@ class ConfigDialog(QDialog):
         self.config.obs_enabled = self.config.capture_mode == CAPTURE_MODE_OBS
         self.config.obs_capture_interval_seconds = self.obs_capture_interval_spin.value()
         self.config.keep_on_top = self.keep_on_top_check.isChecked()
+        self.config.game_overlay_enabled = (
+            self.game_overlay_enabled_check.isChecked()
+        )
+        for key, check in self.game_overlay_item_checks.items():
+            setattr(
+                self.config,
+                f"game_overlay_{key}_enabled",
+                check.isChecked(),
+            )
         self.config.debug_mode = self.debug_mode_check.isChecked()
         set_debug_logging_enabled(self.config.debug_mode)
         self.config.dungeon_ocr_enabled = self.dungeon_ocr_enabled_check.isChecked()
