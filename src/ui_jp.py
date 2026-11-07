@@ -140,6 +140,8 @@ class UIText:
         volume = '音量:'
         pan = '定位（左 -100 ～ 右 +100）:'
         pan_tip = '0で中央、-100で左のみ、100で右のみから再生します。'
+        startup = 'アプリを起動した時'
+        shutdown = 'アプリを終了する時'
         dosukoi_alert = '満腹度が減少している時'
         entou_alert = '遠投状態になった時'
         capture_saved = 'キャプチャ画像を保存した時'

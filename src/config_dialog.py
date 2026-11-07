@@ -301,7 +301,14 @@ class ConfigDialog(QDialog):
         items_group = QGroupBox(self.ui.voice.items_group)
         items_layout = QVBoxLayout(items_group)
         self.voice_item_checks = {}
-        for key in ("dosukoi_alert", "entou_alert", "capture_saved", "shop_price"):
+        for key in (
+            "startup",
+            "shutdown",
+            "dosukoi_alert",
+            "entou_alert",
+            "capture_saved",
+            "shop_price",
+        ):
             check = QCheckBox(getattr(self.ui.voice, key))
             self.voice_item_checks[key] = check
             items_layout.addWidget(check)

@@ -51,6 +51,8 @@ class VoiceAudioTest(unittest.TestCase):
 class VoiceGuidanceTest(unittest.TestCase):
     def config(self, **overrides):
         values = {
+            "voice_startup": False,
+            "voice_shutdown": False,
             "voice_dosukoi_alert": False,
             "voice_entou_alert": False,
             "voice_capture_saved": False,
@@ -101,14 +103,63 @@ class VoiceGuidanceTest(unittest.TestCase):
         guidance.shutdown()
         synthesize.assert_not_called()
 
+    @patch("src.voice_guidance.play_wav")
+    @patch("src.voice_guidance.synthesize", return_value=b"wav")
+    def test_startup_announcement_uses_its_own_switch(self, synthesize, play_wav):
+        guidance = VoiceGuidance(self.config(voice_startup=True))
+        try:
+            guidance.announce("startup", "シレン6ヘルパーを起動しました")
+            deadline = time.monotonic() + 2
+            while not play_wav.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+        finally:
+            guidance.shutdown()
+
+        synthesize.assert_called_once_with(
+            "シレン6ヘルパーを起動しました",
+            "http://127.0.0.1:50021",
+            3,
+        )
+
+    @patch("src.voice_guidance.random.choice", return_value="遠投状態です")
     @patch("src.voice_guidance.play_wav", side_effect=RuntimeError("device error"))
     @patch("src.voice_guidance.synthesize", return_value=b"wav")
-    def test_preview_exposes_playback_failure(self, _synthesize, _play_wav):
+    def test_preview_uses_random_event_message_and_exposes_playback_failure(
+        self,
+        synthesize,
+        _play_wav,
+        choice,
+    ):
         worker = start_voice_preview("http://127.0.0.1:50021", 1)
         worker.join(timeout=2)
 
         self.assertFalse(worker.is_alive())
         self.assertEqual(worker.failure, "device error")
+        choice.assert_called_once()
+        synthesize.assert_called_once_with(
+            "遠投状態です",
+            "http://127.0.0.1:50021",
+            1,
+        )
+
+    @patch("src.voice_guidance.play_wav")
+    @patch("src.voice_guidance.synthesize", return_value=b"wav")
+    def test_shutdown_announcement_finishes_before_worker_exits(
+        self,
+        synthesize,
+        play_wav,
+    ):
+        guidance = VoiceGuidance(self.config(voice_shutdown=True))
+        guidance.shutdown()
+        guidance._worker.join(timeout=2)
+
+        self.assertTrue(guidance.is_finished())
+        synthesize.assert_called_once_with(
+            "シレン6ヘルパーを終了します",
+            "http://127.0.0.1:50021",
+            3,
+        )
+        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
 
 class VoiceConfigTest(unittest.TestCase):
@@ -117,6 +168,8 @@ class VoiceConfigTest(unittest.TestCase):
             config_path = Path(temp_dir) / "config.json"
             config = Config(str(config_path))
             config.alert_output = ALERT_OUTPUT_VOICEVOX
+            config.voice_startup = True
+            config.voice_shutdown = True
             config.voice_shop_price = True
             config.voicevox_speaker_id = 42
             config.voice_output_device = "abc123"
@@ -127,6 +180,8 @@ class VoiceConfigTest(unittest.TestCase):
             loaded = Config(str(config_path))
 
         self.assertEqual(loaded.alert_output, ALERT_OUTPUT_VOICEVOX)
+        self.assertTrue(loaded.voice_startup)
+        self.assertTrue(loaded.voice_shutdown)
         self.assertTrue(loaded.voice_shop_price)
         self.assertEqual(loaded.voicevox_speaker_id, 42)
         self.assertEqual(loaded.voice_output_device, "abc123")

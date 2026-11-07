@@ -2,6 +2,7 @@
 
 import json
 import queue
+import random
 import threading
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -12,6 +13,8 @@ from src.voice_audio import play_wav
 logger = get_logger(__name__)
 
 VOICE_DEFAULTS = {
+    "voice_startup": False,
+    "voice_shutdown": False,
     "voice_dosukoi_alert": False,
     "voice_entou_alert": False,
     "voice_capture_saved": False,
@@ -23,7 +26,13 @@ VOICE_DEFAULTS = {
     "voice_pan": 0,
 }
 
-VOICE_TEST_MESSAGE = "VOICEVOXのテスト再生です"
+VOICE_TEST_MESSAGES = (
+    "6500ギタン腕輪、毒消しか忍び足です",
+    "満腹度が減少しています",
+    "遠投状態です",
+    "キャプチャ画像を保存しました",
+    "25階なので自動キャプチャしました",
+)
 
 
 def synthesize(text, url, speaker):
@@ -53,7 +62,7 @@ class VoicePreviewThread(threading.Thread):
 
     def run(self):
         try:
-            wav = synthesize(VOICE_TEST_MESSAGE, self.url, self.speaker)
+            wav = synthesize(random.choice(VOICE_TEST_MESSAGES), self.url, self.speaker)
             play_wav(wav, self.device_id, self.volume, self.pan)
         except Exception as error:
             self.failure = str(error) or type(error).__name__
@@ -125,13 +134,17 @@ class VoiceGuidance:
             if self._closing:
                 return
             self._generation += 1
-            self._closing = True
             while True:
                 try:
                     self._queue.get_nowait()
                     self._queue.task_done()
                 except queue.Empty:
                     break
+            self.announce("shutdown", "シレン6ヘルパーを終了します")
+            self._closing = True
+
+    def is_finished(self):
+        return not self._worker.is_alive()
 
     def _run(self):
         cache = {}

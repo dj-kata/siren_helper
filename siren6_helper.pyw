@@ -295,6 +295,7 @@ class MainWindow(MainWindowUI):
     def __init__(self):
         self.config = Config()
         super().__init__(self.config)
+        self._closing = False
 
         self.siren_settings = UserSettings()
         self.itemlist = ItemList()
@@ -397,6 +398,7 @@ class MainWindow(MainWindowUI):
 
         self.global_hotkey_pressed.connect(self.handle_global_hotkey)
         self.setup_global_hotkeys()
+        self.voice_guidance.announce("startup", "シレン6ヘルパーを起動しました")
         logger.info("アプリケーション起動完了")
 
     @property
@@ -3592,6 +3594,13 @@ class MainWindow(MainWindowUI):
             logger.error(f"トリガー実行エラー ({trigger}): {e}")
 
     def closeEvent(self, event):
+        if self._closing:
+            if self.voice_guidance.is_finished():
+                event.accept()
+            else:
+                event.ignore()
+            return
+        self._closing = True
         self.execute_obs_triggers("app_end")
         self.stop_manpuku_warning()
         self.voice_guidance.shutdown()
@@ -3611,7 +3620,18 @@ class MainWindow(MainWindowUI):
         self.stop_websocket_server()
 
         logger.info("アプリケーション終了")
-        event.accept()
+        if self.voice_guidance.is_finished():
+            event.accept()
+        else:
+            event.ignore()
+            self.voice_close_timer = QTimer(self)
+            self.voice_close_timer.timeout.connect(self.finish_voice_shutdown)
+            self.voice_close_timer.start(100)
+
+    def finish_voice_shutdown(self):
+        if self.voice_guidance.is_finished():
+            self.voice_close_timer.stop()
+            self.close()
 
 
 def main():

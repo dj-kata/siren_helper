@@ -269,6 +269,12 @@ class Config:
             self.entou_alert_enabled = bool(
                 config_data.get("entou_alert_enabled", self.entou_alert_enabled)
             )
+            self.voice_startup = bool(
+                config_data.get("voice_startup", self.voice_startup)
+            )
+            self.voice_shutdown = bool(
+                config_data.get("voice_shutdown", self.voice_shutdown)
+            )
             self.voice_dosukoi_alert = bool(
                 config_data.get("voice_dosukoi_alert", self.voice_dosukoi_alert)
             )
