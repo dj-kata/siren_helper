@@ -22,23 +22,36 @@ main_file_name=siren6_helper
 project_name=siren6_helper
 target=$(project_name)/.built  # timestampファイルにすることで連続でmakeできないように対策
 target_zip=$(project_name).zip
+prepared=$(project_name)/.prepared
 srcs=$(wildcard *.py) $(wildcard *.pyw) $(wildcard src/*.py) $(wildcard misc/*.py)
 html_files=$(wildcard template/*.html)
 version=$(shell head -n1 version.txt)
 ZIP ?= 7z a -tzip -mx=1 -mmt=on
 ZIP_EXCLUDES = -xr!.venv
+SYNC_DEST ?= /mnt/d/bin/YouTubeLive
+
+.PHONY: top all build-sync sync dist clean test build windows-check windows-sync
 
 top: $(target_zip)
 all: $(target_zip)
 
-$(target_zip): $(target)
+build-sync:
+	+$(MAKE) -j2 $(target_zip) sync
+
+sync: $(prepared)
+	rsync -av $(project_name) "$(SYNC_DEST)"
+
+$(target_zip): $(prepared)
 	@rm -rf $(target_zip)
+	$(ZIP) $(target_zip) $(project_name) $(ZIP_EXCLUDES)
+
+$(prepared): $(target)
 	@rm -rf $(project_name)/log
 	@rm -rf $(project_name)/*.json
 	@find $(project_name) -type d -name .venv -prune -exec rm -rf {} +
-	$(ZIP) $(target_zip) $(project_name) $(ZIP_EXCLUDES)
+	@touch $(prepared)
 
-$(target): $(srcs) $(html_files) $(project_name).pyw version.txt
+$(target): $(srcs) $(html_files) $(project_name).pyw version.txt pyproject.toml uv.lock
 	@$(WINDOWS_BUILD)
 
 # 	# Tcl/Tk関連
@@ -66,8 +79,6 @@ dist:
 clean:
 	@rm -rf $(target)
 	@rm -rf __pycache__
-
-.PHONY: test build windows-check windows-sync
 
 build:
 	@$(WINDOWS_BUILD)

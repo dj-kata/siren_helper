@@ -100,7 +100,11 @@ Windows 側とコンテナ側で同じチェックアウトを参照する必要
    make test           # Windows 上で GUI 起動（自動テストではありません）
    make build          # Windows 上で cx_Freeze ビルド
    make                # 必要ならビルドし、コンテナ側の 7z で ZIP 作成
+   make build-sync     # ZIP作成と動作確認用ディレクトリへの同期を並列実行
    ```
+
+`make build-sync` の同期先は既定で `/mnt/d/bin/YouTubeLive` です。
+別の場所へ同期する場合は、`make build-sync SYNC_DEST=/path/to/destination` のように指定します。
 
 `run` / `build` も uv が依存を同期するため、`windows-sync` は必要なときだけで構いません。
 Windows 側の uv は常に `.venv-win` を使用し、コンテナの `.venv-linux` と分離します。
