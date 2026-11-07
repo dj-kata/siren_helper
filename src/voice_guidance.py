@@ -15,6 +15,7 @@ logger = get_logger(__name__)
 VOICE_DEFAULTS = {
     "voice_startup": False,
     "voice_shutdown": False,
+    "voice_errors": False,
     "voice_dosukoi_alert": False,
     "voice_entou_alert": False,
     "voice_capture_saved": False,
@@ -97,6 +98,7 @@ class VoiceGuidance:
         self._queue = queue.Queue(maxsize=32)
         self._generation = 0
         self._closing = False
+        self._active_errors = set()
         self.set_config(config)
         self._worker = threading.Thread(
             target=self._run,
@@ -111,6 +113,8 @@ class VoiceGuidance:
                 key: getattr(config, key, default)
                 for key, default in VOICE_DEFAULTS.items()
             }
+            if not self._settings["voice_errors"]:
+                self._active_errors.clear()
             self._generation += 1
 
     def announce(self, category, text):
@@ -121,13 +125,26 @@ class VoiceGuidance:
                 or not text
                 or not self._settings.get(enabled_key, False)
             ):
-                return
+                return False
             try:
                 self._queue.put_nowait(
                     (self._generation, str(text), self._settings.copy())
                 )
+                return True
             except queue.Full:
                 logger.warning("VOICEVOX音声案内キューが満杯のため案内を省略しました")
+                return False
+
+    def error_state(self, key, message=None):
+        """エラーの発生時に一度だけ読み上げ、復旧時に再通知可能にする。"""
+        with self._lock:
+            if not message:
+                self._active_errors.discard(key)
+                return
+            if key in self._active_errors or not self._settings["voice_errors"]:
+                return
+            if self.announce("errors", message):
+                self._active_errors.add(key)
 
     def shutdown(self):
         with self._lock:

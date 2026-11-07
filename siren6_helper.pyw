@@ -141,6 +141,8 @@ startup_trace("imported src.voice_guidance")
 logger = get_logger("new_siren6_helper")
 startup_trace("created logger")
 
+SPOUT_VOICE_ERROR_DELAY_SECONDS = 5.0
+
 
 def write_fatal_error(exc):
     try:
@@ -368,6 +370,8 @@ class MainWindow(MainWindowUI):
         self.websocket_thread = None
         self.http_server = None
         self.http_server_config_signature = None
+        self.http_server_voice_error = None
+        self.spout_voice_wait_started_at = None
         self.voice_guidance = VoiceGuidance(self.config)
         self.game_overlay = GameOverlay(self.config)
         self.http_action_requested.connect(self.handle_http_action)
@@ -393,6 +397,7 @@ class MainWindow(MainWindowUI):
 
         self.display_timer = QTimer()
         self.display_timer.timeout.connect(self.update_display)
+        self.display_timer.timeout.connect(self.poll_runtime_voice_errors)
         self.display_timer.timeout.connect(self.update_game_overlay)
         self.display_timer.start(500)
 
@@ -442,6 +447,8 @@ class MainWindow(MainWindowUI):
         self.stop_http_server()
         self.http_server_config_signature = self.http_server_signature()
         if not self.config.http_server_enabled:
+            self.http_server_voice_error = None
+            self.voice_guidance.error_state("http_server")
             self.update_http_status_label()
             return
         self.http_server = BrowserHTTPServer(
@@ -450,8 +457,30 @@ class MainWindow(MainWindowUI):
             port=self.config.http_server_port,
         )
         if not self.http_server.start():
+            failed_port = self.config.http_server_port
+            error = self.http_server.last_error
+            error_code = getattr(error, "winerror", None) or getattr(
+                error,
+                "errno",
+                None,
+            )
+            if error_code in (48, 98, 10048):
+                self.http_server_voice_error = (
+                    f"HTTPサーバー用のポート{failed_port}は、すでにほかのアプリで使用されています"
+                )
+            else:
+                self.http_server_voice_error = (
+                    f"HTTPサーバーをポート{failed_port}で起動できません。HTTP表示NICとポート設定を確認してください"
+                )
             self.http_server = None
             self.statusBar().showMessage("HTTPサーバを起動できませんでした", 5000)
+            self.voice_guidance.error_state(
+                "http_server",
+                self.http_server_voice_error,
+            )
+        else:
+            self.http_server_voice_error = None
+            self.voice_guidance.error_state("http_server")
         self.update_http_status_label()
 
     def stop_http_server(self):
@@ -528,10 +557,74 @@ class MainWindow(MainWindowUI):
                 QTimer.singleShot(250, self.connect_obs_after_dialog)
 
     def update_spout_capture(self):
+        self.spout_voice_wait_started_at = None
+        self.voice_guidance.error_state("spout_capture")
         if self.config.capture_mode == CAPTURE_MODE_SPOUT:
             self.spout_capture.start(self.config.spout_sender_name)
         else:
             self.spout_capture.stop()
+
+    def poll_runtime_voice_errors(self):
+        if self._closing:
+            return
+
+        if self.config.http_server_enabled and (
+            self.http_server is None or not self.http_server.is_running()
+        ):
+            self.voice_guidance.error_state(
+                "http_server",
+                self.http_server_voice_error
+                or f"HTTPサーバーがポート{self.config.http_server_port}で停止しました",
+            )
+        else:
+            self.voice_guidance.error_state("http_server")
+
+        if self.config.capture_mode == CAPTURE_MODE_OBS:
+            if self.obs_manager.is_connected:
+                self.voice_guidance.error_state("obs_connection")
+            else:
+                self.voice_guidance.error_state(
+                    "obs_connection",
+                    "OBSに接続できません。OBSの起動とOBS制御設定を確認してください",
+                )
+            if self.config.monitor_source_name:
+                self.voice_guidance.error_state("obs_source")
+            else:
+                self.voice_guidance.error_state(
+                    "obs_source",
+                    "OBSの監視対象ソースが設定されていません",
+                )
+        else:
+            self.voice_guidance.error_state("obs_connection")
+            self.voice_guidance.error_state("obs_source")
+
+        if self.config.capture_mode != CAPTURE_MODE_SPOUT:
+            self.spout_voice_wait_started_at = None
+            self.voice_guidance.error_state("spout_capture")
+            return
+
+        status = self.spout_capture.current_status()
+        if self.spout_capture.is_connected:
+            self.spout_voice_wait_started_at = None
+            self.voice_guidance.error_state("spout_capture")
+            return
+        if status and status[0] == "error":
+            self.spout_voice_wait_started_at = None
+            self.voice_guidance.error_state(
+                "spout_capture",
+                "Spoutの受信を開始できません。Spoutの設定と必要な機能を確認してください",
+            )
+            return
+        if not status or status[0] != "waiting":
+            return
+        now = time.monotonic()
+        if self.spout_voice_wait_started_at is None:
+            self.spout_voice_wait_started_at = now
+        if now - self.spout_voice_wait_started_at >= SPOUT_VOICE_ERROR_DELAY_SECONDS:
+            self.voice_guidance.error_state(
+                "spout_capture",
+                "Spoutの映像を受信できません。OBSの起動とSpout送信名を確認してください",
+            )
 
     def update_all_configs(self, connect_obs: bool = True):
         old_port = self.config.websocket_data_port

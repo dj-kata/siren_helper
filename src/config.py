@@ -275,6 +275,9 @@ class Config:
             self.voice_shutdown = bool(
                 config_data.get("voice_shutdown", self.voice_shutdown)
             )
+            self.voice_errors = bool(
+                config_data.get("voice_errors", self.voice_errors)
+            )
             self.voice_dosukoi_alert = bool(
                 config_data.get("voice_dosukoi_alert", self.voice_dosukoi_alert)
             )

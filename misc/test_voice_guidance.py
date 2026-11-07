@@ -13,6 +13,7 @@ from unittest.mock import patch
 import numpy as np
 
 from src.config import ALERT_OUTPUT_VOICEVOX, Config
+from src.http_server import BrowserHTTPServer
 from src.voice_audio import apply_pan, wav_pcm
 from src.voice_guidance import (
     VoiceGuidance,
@@ -48,11 +49,24 @@ class VoiceAudioTest(unittest.TestCase):
         self.assertIs(same_format, audio_format)
 
 
+class HTTPServerErrorTest(unittest.TestCase):
+    @patch(
+        "src.http_server._ThreadingHTTPServer",
+        side_effect=OSError(10048, "address already in use"),
+    )
+    def test_listen_error_is_retained_for_voice_guidance(self, _server):
+        server = BrowserHTTPServer(SimpleNamespace(), port=8787)
+
+        self.assertFalse(server.start())
+        self.assertEqual(server.last_error.errno, 10048)
+
+
 class VoiceGuidanceTest(unittest.TestCase):
     def config(self, **overrides):
         values = {
             "voice_startup": False,
             "voice_shutdown": False,
+            "voice_errors": False,
             "voice_dosukoi_alert": False,
             "voice_entou_alert": False,
             "voice_capture_saved": False,
@@ -161,6 +175,41 @@ class VoiceGuidanceTest(unittest.TestCase):
         )
         play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
+    @patch("src.voice_guidance.play_wav")
+    @patch("src.voice_guidance.synthesize", return_value=b"wav")
+    def test_error_is_announced_once_until_recovery(self, synthesize, play_wav):
+        guidance = VoiceGuidance(self.config(voice_errors=True))
+        try:
+            guidance.error_state("http", "HTTPサーバーを起動できません")
+            guidance.error_state("http", "HTTPサーバーを起動できません")
+            deadline = time.monotonic() + 2
+            while play_wav.call_count < 1 and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            guidance.error_state("http")
+            guidance.error_state("http", "HTTPサーバーを起動できません")
+            deadline = time.monotonic() + 2
+            while play_wav.call_count < 2 and time.monotonic() < deadline:
+                time.sleep(0.01)
+        finally:
+            guidance.shutdown()
+
+        synthesize.assert_called_once_with(
+            "HTTPサーバーを起動できません",
+            "http://127.0.0.1:50021",
+            3,
+        )
+        self.assertEqual(play_wav.call_count, 2)
+
+    @patch("src.voice_guidance.synthesize")
+    def test_error_is_ignored_when_error_voice_is_disabled(self, synthesize):
+        guidance = VoiceGuidance(self.config())
+        guidance.error_state("spout", "Spoutの映像を受信できません")
+        time.sleep(0.15)
+        guidance.shutdown()
+
+        synthesize.assert_not_called()
+
 
 class VoiceConfigTest(unittest.TestCase):
     def test_voice_settings_round_trip(self):
@@ -170,6 +219,7 @@ class VoiceConfigTest(unittest.TestCase):
             config.alert_output = ALERT_OUTPUT_VOICEVOX
             config.voice_startup = True
             config.voice_shutdown = True
+            config.voice_errors = True
             config.voice_shop_price = True
             config.voicevox_speaker_id = 42
             config.voice_output_device = "abc123"
@@ -182,6 +232,7 @@ class VoiceConfigTest(unittest.TestCase):
         self.assertEqual(loaded.alert_output, ALERT_OUTPUT_VOICEVOX)
         self.assertTrue(loaded.voice_startup)
         self.assertTrue(loaded.voice_shutdown)
+        self.assertTrue(loaded.voice_errors)
         self.assertTrue(loaded.voice_shop_price)
         self.assertEqual(loaded.voicevox_speaker_id, 42)
         self.assertEqual(loaded.voice_output_device, "abc123")

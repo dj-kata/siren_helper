@@ -304,6 +304,7 @@ class ConfigDialog(QDialog):
         for key in (
             "startup",
             "shutdown",
+            "errors",
             "dosukoi_alert",
             "entou_alert",
             "capture_saved",

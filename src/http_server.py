@@ -33,15 +33,18 @@ class BrowserHTTPServer:
         self.httpd: ThreadingHTTPServer | None = None
         self.thread: threading.Thread | None = None
         self._stopping = threading.Event()
+        self.last_error: OSError | None = None
 
     def start(self) -> bool:
         if self.httpd is not None:
             return True
         self._stopping.clear()
+        self.last_error = None
 
         try:
             self.httpd = _ThreadingHTTPServer((self.host, self.port), self._make_handler())
         except OSError as e:
+            self.last_error = e
             logger.error(f"HTTPサーバ起動失敗: {self.host}:{self.port} {e}")
             self.httpd = None
             return False

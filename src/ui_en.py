@@ -142,6 +142,7 @@ class UIText:
         pan_tip = '0 is center, -100 is left only, and 100 is right only.'
         startup = 'When the app starts'
         shutdown = 'When the app exits'
+        errors = 'When an application error occurs'
         dosukoi_alert = 'When fullness is decreasing'
         entou_alert = 'When Throwing status is detected'
         capture_saved = 'When a capture image is saved'
