@@ -5,6 +5,7 @@ Configに残っている共通設定だけを編集する。
 
 import os
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIntValidator
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -28,6 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from src.config import (
+    ALERT_OUTPUT_SOUND,
+    ALERT_OUTPUT_VOICEVOX,
     CAPTURE_MODE_DIRECT,
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_NONE,
@@ -44,6 +47,8 @@ from src.config import (
 from src.funcs import load_ui_text
 from src.logger import get_logger, set_debug_logging_enabled
 from src.network_info import get_local_ipv4_interfaces
+from src.voice_audio import audio_output_devices
+from src.voice_guidance import start_voice_preview
 
 logger = get_logger(__name__)
 
@@ -68,6 +73,7 @@ class ConfigDialog(QDialog):
 
         tab_widget = QTabWidget()
         tab_widget.addTab(self.create_general_tab(), self.ui.tab.feature)
+        tab_widget.addTab(self.create_voicevox_tab(), self.ui.tab.voicevox)
         layout.addWidget(tab_widget)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -202,6 +208,18 @@ class ConfigDialog(QDialog):
         self.entou_alert_enabled_check = QCheckBox(self.ui.feature.entou_alert_enabled)
         dosukoi_form.addRow(self.entou_alert_enabled_check)
 
+        self.alert_output_combo = QComboBox()
+        self.alert_output_combo.addItem(
+            self.ui.feature.alert_output_sound,
+            ALERT_OUTPUT_SOUND,
+        )
+        self.alert_output_combo.addItem(
+            self.ui.feature.alert_output_voicevox,
+            ALERT_OUTPUT_VOICEVOX,
+        )
+        self.alert_output_combo.currentIndexChanged.connect(self.update_alert_output_controls)
+        dosukoi_form.addRow(self.ui.feature.alert_output, self.alert_output_combo)
+
         self.dosukoi_alert_volume_combo = QComboBox()
         for volume in range(0, 101, 20):
             self.dosukoi_alert_volume_combo.addItem(f"{volume}", volume)
@@ -212,6 +230,84 @@ class ConfigDialog(QDialog):
         layout.addWidget(dosukoi_group)
         layout.addStretch()
         return widget
+
+    def create_voicevox_tab(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        basic_group = QGroupBox(self.ui.voice.basic_group)
+        basic_layout = QVBoxLayout(basic_group)
+        test_layout = QHBoxLayout()
+        self.voice_test_button = QPushButton(self.ui.voice.test)
+        self.voice_test_button.clicked.connect(self.on_voice_test)
+        test_layout.addWidget(self.voice_test_button)
+        test_layout.addStretch()
+        basic_layout.addLayout(test_layout)
+
+        form = QFormLayout()
+        self.voicevox_url_edit = QLineEdit()
+        self.voicevox_url_edit.setPlaceholderText("http://127.0.0.1:50021")
+        self.voicevox_speaker_spin = QSpinBox()
+        self.voicevox_speaker_spin.setRange(0, 2147483647)
+        self.voice_output_combo = QComboBox()
+        self.voice_output_combo.addItem(self.ui.voice.system_default, "")
+        for device_id, name in audio_output_devices():
+            self.voice_output_combo.addItem(name, device_id)
+        self.voice_volume_spin = QSpinBox()
+        self.voice_volume_spin.setRange(0, 100)
+        self.voice_volume_spin.setSuffix("%")
+        self.voice_pan_spin = QSpinBox()
+        self.voice_pan_spin.setRange(-100, 100)
+        self.voice_pan_spin.setToolTip(self.ui.voice.pan_tip)
+        form.addRow(self.ui.voice.url, self.voicevox_url_edit)
+        form.addRow(self.ui.voice.speaker, self.voicevox_speaker_spin)
+        form.addRow(self.ui.voice.output_device, self.voice_output_combo)
+        form.addRow(self.ui.voice.volume, self.voice_volume_spin)
+        form.addRow(self.ui.voice.pan, self.voice_pan_spin)
+        basic_layout.addLayout(form)
+        layout.addWidget(basic_group)
+
+        items_group = QGroupBox(self.ui.voice.items_group)
+        items_layout = QVBoxLayout(items_group)
+        self.voice_item_checks = {}
+        for key in ("dosukoi_alert", "entou_alert", "capture_saved", "shop_price"):
+            check = QCheckBox(getattr(self.ui.voice, key))
+            self.voice_item_checks[key] = check
+            items_layout.addWidget(check)
+        layout.addWidget(items_group)
+
+        help_label = QLabel(self.ui.voice.help)
+        help_label.setWordWrap(True)
+        layout.addWidget(help_label)
+        layout.addStretch()
+
+        self.voice_test_timer = QTimer(self)
+        self.voice_test_timer.setInterval(100)
+        self.voice_test_timer.timeout.connect(self.poll_voice_test)
+        self.voice_test_worker = None
+        return widget
+
+    def on_voice_test(self):
+        if self.voice_test_timer.isActive():
+            return
+        url = (
+            self.voicevox_url_edit.text().strip().rstrip("/")
+            or "http://127.0.0.1:50021"
+        )
+        self.voice_test_worker = start_voice_preview(
+            url,
+            self.voicevox_speaker_spin.value(),
+            self.voice_output_combo.currentData() or "",
+            self.voice_volume_spin.value(),
+            self.voice_pan_spin.value(),
+        )
+        self.voice_test_button.setEnabled(False)
+        self.voice_test_timer.start()
+
+    def poll_voice_test(self):
+        if self.voice_test_worker is not None and not self.voice_test_worker.is_alive():
+            self.voice_test_timer.stop()
+            self.voice_test_button.setEnabled(True)
 
     def update_auto_capture_controls(self):
         dungeon_ocr_enabled = self.dungeon_ocr_enabled_check.isChecked()
@@ -273,11 +369,35 @@ class ConfigDialog(QDialog):
         self.dosukoi_alert_volume_combo.setCurrentIndex(volume_index if volume_index >= 0 else 5)
         self.dosukoi_alert_threshold_spin.setValue(self.config.dosukoi_alert_threshold)
         self.entou_alert_enabled_check.setChecked(self.config.entou_alert_enabled)
+        alert_output_index = self.alert_output_combo.findData(self.config.alert_output)
+        self.alert_output_combo.setCurrentIndex(
+            alert_output_index if alert_output_index >= 0 else 0
+        )
+        self.voicevox_url_edit.setText(self.config.voicevox_url)
+        self.voicevox_speaker_spin.setValue(self.config.voicevox_speaker_id)
+        output_index = self.voice_output_combo.findData(self.config.voice_output_device)
+        if output_index < 0 and self.config.voice_output_device:
+            self.voice_output_combo.addItem(
+                self.ui.voice.output_unavailable,
+                self.config.voice_output_device,
+            )
+            output_index = self.voice_output_combo.count() - 1
+        self.voice_output_combo.setCurrentIndex(max(0, output_index))
+        self.voice_volume_spin.setValue(self.config.voice_volume)
+        self.voice_pan_spin.setValue(self.config.voice_pan)
+        for key, check in self.voice_item_checks.items():
+            check.setChecked(bool(getattr(self.config, f"voice_{key}")))
         self.main_font_size_spin.setValue(self.config.main_font_size)
+        self.update_alert_output_controls()
         self.update_auto_capture_controls()
 
     def update_spout_controls(self, *_args):
         self.spout_sender_edit.setEnabled(self.capture_mode_combo.currentData() == CAPTURE_MODE_SPOUT)
+
+    def update_alert_output_controls(self, *_args):
+        self.dosukoi_alert_volume_combo.setEnabled(
+            self.alert_output_combo.currentData() == ALERT_OUTPUT_SOUND
+        )
 
     def accept(self):
         self.config.image_save_path = self.image_save_path_edit.text().strip() or "captures"
@@ -321,6 +441,17 @@ class ConfigDialog(QDialog):
         self.config.dosukoi_alert_volume = self.dosukoi_alert_volume_combo.currentData()
         self.config.dosukoi_alert_threshold = self.dosukoi_alert_threshold_spin.value()
         self.config.entou_alert_enabled = self.entou_alert_enabled_check.isChecked()
+        self.config.alert_output = self.alert_output_combo.currentData() or ALERT_OUTPUT_SOUND
+        self.config.voicevox_url = (
+            self.voicevox_url_edit.text().strip().rstrip("/")
+            or "http://127.0.0.1:50021"
+        )
+        self.config.voicevox_speaker_id = self.voicevox_speaker_spin.value()
+        self.config.voice_output_device = self.voice_output_combo.currentData() or ""
+        self.config.voice_volume = self.voice_volume_spin.value()
+        self.config.voice_pan = self.voice_pan_spin.value()
+        for key, check in self.voice_item_checks.items():
+            setattr(self.config, f"voice_{key}", check.isChecked())
         self.config.main_font_size = self.main_font_size_spin.value()
         self.config.save_config()
         logger.info("設定を保存しました")

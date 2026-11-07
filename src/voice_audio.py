@@ -1,0 +1,139 @@
+"""選択したQt音声出力へVOICEVOXのWAVを同期再生する。"""
+
+from io import BytesIO
+import wave
+
+import numpy as np
+from PySide6.QtCore import QBuffer, QEventLoop, QIODevice, QThread, QTimer
+from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaDevices, QtAudio
+
+
+def audio_output_devices():
+    return [
+        (bytes(device.id()).hex(), device.description())
+        for device in QMediaDevices.audioOutputs()
+    ]
+
+
+def resolve_audio_device(device_id):
+    if device_id:
+        for device in QMediaDevices.audioOutputs():
+            if bytes(device.id()).hex() == device_id:
+                return device
+        raise RuntimeError("選択した音声出力デバイスが見つかりません")
+    device = QMediaDevices.defaultAudioOutput()
+    if device.isNull():
+        raise RuntimeError("音声出力デバイスがありません")
+    return device
+
+
+def wav_pcm(wav):
+    with wave.open(BytesIO(wav), "rb") as source:
+        formats = {
+            1: QAudioFormat.SampleFormat.UInt8,
+            2: QAudioFormat.SampleFormat.Int16,
+            4: QAudioFormat.SampleFormat.Int32,
+        }
+        sample_format = formats.get(source.getsampwidth())
+        if sample_format is None:
+            raise ValueError("対応していないWAVサンプル形式です")
+        audio_format = QAudioFormat()
+        audio_format.setSampleRate(source.getframerate())
+        audio_format.setChannelCount(source.getnchannels())
+        audio_format.setSampleFormat(sample_format)
+        return source.readframes(source.getnframes()), audio_format
+
+
+def apply_pan(pcm, audio_format, pan):
+    """直線的な左右バランスを適用し、必要ならモノラルをステレオ化する。"""
+    pan = max(-100, min(100, pan)) / 100
+    if not pan or not pcm:
+        return pcm, audio_format
+    channels = audio_format.channelCount()
+    if channels not in (1, 2):
+        raise ValueError("定位はモノラルまたはステレオ音声に対応しています")
+    dtype = {
+        QAudioFormat.SampleFormat.UInt8: np.dtype("u1"),
+        QAudioFormat.SampleFormat.Int16: np.dtype("<i2"),
+        QAudioFormat.SampleFormat.Int32: np.dtype("<i4"),
+    }[audio_format.sampleFormat()]
+    samples = np.frombuffer(pcm, dtype=dtype).reshape(-1, channels).astype(np.float64)
+    offset = 128 if dtype == np.dtype("u1") else 0
+    samples -= offset
+    if channels == 1:
+        samples = np.repeat(samples, 2, axis=1)
+    samples *= [1 - max(0, pan), 1 + min(0, pan)]
+    limits = np.iinfo(dtype)
+    result = np.clip(np.rint(samples + offset), limits.min, limits.max).astype(dtype)
+    output_format = QAudioFormat(audio_format)
+    output_format.setChannelCount(2)
+    return result.tobytes(), output_format
+
+
+class _PlaybackThread(QThread):
+    """音声sinkとイベントループをGUIスレッド外で所有する。"""
+
+    def __init__(self, wav, device_id, volume, pan):
+        super().__init__()
+        self.wav = wav
+        self.device_id = device_id
+        self.volume = volume
+        self.pan = pan
+        self.failure = None
+
+    def run(self):
+        sink = None
+        timeout = None
+        state_timer = None
+        try:
+            pcm, audio_format = wav_pcm(self.wav)
+            pcm, audio_format = apply_pan(pcm, audio_format, self.pan)
+            if not pcm:
+                return
+            device = resolve_audio_device(self.device_id)
+            if not device.isFormatSupported(audio_format):
+                raise RuntimeError("音声出力デバイスがWAVの形式に対応していません")
+            loop = QEventLoop()
+            buffer = QBuffer()
+            buffer.setData(pcm)
+            buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+            sink = QAudioSink(device, audio_format)
+            sink.setVolume(max(0, min(100, self.volume)) / 100)
+
+            def check_state():
+                if sink.state() in (QtAudio.State.IdleState, QtAudio.State.StoppedState):
+                    loop.quit()
+
+            state_timer = QTimer()
+            state_timer.setInterval(20)
+            state_timer.timeout.connect(check_state)
+            timeout = QTimer()
+            timeout.setSingleShot(True)
+            timeout.timeout.connect(loop.quit)
+            duration_ms = audio_format.durationForBytes(len(pcm)) // 1000
+            timeout.start(int(duration_ms + 5000))
+            sink.start(buffer)
+            if sink.state() in (QtAudio.State.ActiveState, QtAudio.State.SuspendedState):
+                state_timer.start()
+                loop.exec()
+            if not timeout.isActive():
+                raise RuntimeError("音声再生がタイムアウトしました")
+            if sink.error() != QtAudio.Error.NoError:
+                raise RuntimeError(f"音声再生に失敗しました: {sink.error()}")
+        except Exception as error:
+            self.failure = error.with_traceback(None)
+        finally:
+            if state_timer is not None:
+                state_timer.stop()
+            if timeout is not None:
+                timeout.stop()
+            if sink is not None:
+                sink.stop()
+
+
+def play_wav(wav, device_id="", volume=100, pan=0):
+    worker = _PlaybackThread(wav, device_id, volume, pan)
+    worker.start()
+    worker.wait()
+    if worker.failure is not None:
+        raise worker.failure

@@ -3,6 +3,7 @@ import os
 import traceback
 
 from src.logger import get_logger, set_debug_logging_enabled
+from src.voice_guidance import VOICE_DEFAULTS
 
 logger = get_logger(__name__)
 
@@ -42,6 +43,9 @@ AUTO_CAPTURE_FLOOR_INTERVALS = (
     AUTO_CAPTURE_FLOOR_INTERVAL_10,
     AUTO_CAPTURE_FLOOR_INTERVAL_25,
 )
+ALERT_OUTPUT_SOUND = "sound"
+ALERT_OUTPUT_VOICEVOX = "voicevox"
+ALERT_OUTPUTS = (ALERT_OUTPUT_SOUND, ALERT_OUTPUT_VOICEVOX)
 
 
 def clamp_int(value, default, minimum, maximum):
@@ -111,9 +115,12 @@ class Config:
         self.dungeon_ocr_enabled = True
         self.shop_ocr_enabled = True
         self.dosukoi_alert_enabled = False
+        self.alert_output = ALERT_OUTPUT_SOUND
         self.dosukoi_alert_volume = 100
         self.dosukoi_alert_threshold = 130
         self.entou_alert_enabled = False
+        for key, default in VOICE_DEFAULTS.items():
+            setattr(self, key, default)
 
         self.load_config()
         set_debug_logging_enabled(self.debug_mode)
@@ -218,6 +225,10 @@ class Config:
             self.dosukoi_alert_enabled = bool(
                 config_data.get("dosukoi_alert_enabled", self.dosukoi_alert_enabled)
             )
+            alert_output = config_data.get("alert_output", self.alert_output)
+            self.alert_output = (
+                alert_output if alert_output in ALERT_OUTPUTS else ALERT_OUTPUT_SOUND
+            )
             self.dosukoi_alert_volume = clamp_int(
                 config_data.get("dosukoi_alert_volume", self.dosukoi_alert_volume),
                 self.dosukoi_alert_volume,
@@ -232,6 +243,43 @@ class Config:
             )
             self.entou_alert_enabled = bool(
                 config_data.get("entou_alert_enabled", self.entou_alert_enabled)
+            )
+            self.voice_dosukoi_alert = bool(
+                config_data.get("voice_dosukoi_alert", self.voice_dosukoi_alert)
+            )
+            self.voice_entou_alert = bool(
+                config_data.get("voice_entou_alert", self.voice_entou_alert)
+            )
+            self.voice_capture_saved = bool(
+                config_data.get("voice_capture_saved", self.voice_capture_saved)
+            )
+            self.voice_shop_price = bool(
+                config_data.get("voice_shop_price", self.voice_shop_price)
+            )
+            self.voicevox_url = (
+                str(config_data.get("voicevox_url", self.voicevox_url)).strip()
+                or VOICE_DEFAULTS["voicevox_url"]
+            )
+            self.voicevox_speaker_id = clamp_int(
+                config_data.get("voicevox_speaker_id", self.voicevox_speaker_id),
+                self.voicevox_speaker_id,
+                0,
+                2147483647,
+            )
+            self.voice_output_device = str(
+                config_data.get("voice_output_device", self.voice_output_device) or ""
+            )
+            self.voice_volume = clamp_int(
+                config_data.get("voice_volume", self.voice_volume),
+                self.voice_volume,
+                0,
+                100,
+            )
+            self.voice_pan = clamp_int(
+                config_data.get("voice_pan", self.voice_pan),
+                self.voice_pan,
+                -100,
+                100,
             )
         except Exception as e:
             logger.error(traceback.format_exc())
@@ -251,6 +299,8 @@ class Config:
         if self.auto_capture_floor_interval not in AUTO_CAPTURE_FLOOR_INTERVALS:
             self.auto_capture_floor_interval = AUTO_CAPTURE_FLOOR_INTERVAL_ALL
         self.auto_capture_on_adventure_result = bool(self.auto_capture_on_adventure_result)
+        if self.alert_output not in ALERT_OUTPUTS:
+            self.alert_output = ALERT_OUTPUT_SOUND
         self.obs_enabled = self.capture_mode == CAPTURE_MODE_OBS
         config_data = {
             "obs_enabled": self.obs_enabled,
@@ -289,9 +339,11 @@ class Config:
             "dungeon_ocr_enabled": self.dungeon_ocr_enabled,
             "shop_ocr_enabled": self.shop_ocr_enabled,
             "dosukoi_alert_enabled": self.dosukoi_alert_enabled,
+            "alert_output": self.alert_output,
             "dosukoi_alert_volume": self.dosukoi_alert_volume,
             "dosukoi_alert_threshold": self.dosukoi_alert_threshold,
             "entou_alert_enabled": self.entou_alert_enabled,
+            **{key: getattr(self, key, default) for key, default in VOICE_DEFAULTS.items()},
         }
 
         try:

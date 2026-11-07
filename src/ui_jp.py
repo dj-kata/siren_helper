@@ -57,6 +57,7 @@ class UIText:
     class tab:
         """設定ダイアログのタブ"""
         feature = '機能設定'
+        voicevox = 'VOICEVOX連携'
         music_pack = '楽曲パック'
         image_save = '画像保存'
         data_import = 'データ登録'
@@ -111,6 +112,27 @@ class UIText:
         dosukoi_alert_volume = 'アラート音量:'
         dosukoi_alert_threshold = 'ドスコイアラートしきい値:'
         entou_alert_enabled = '遠投状態アラートを有効にする'
+        alert_output = 'アラートの出力先:'
+        alert_output_sound = '警告音'
+        alert_output_voicevox = 'VOICEVOX'
+
+    class voice:
+        basic_group = 'VOICEVOX設定'
+        items_group = '音声案内する場面'
+        test = 'テスト再生'
+        url = 'VOICEVOX接続先URL:'
+        speaker = '音声のスタイルID:'
+        output_device = '再生先デバイス:'
+        system_default = 'システムの既定'
+        output_unavailable = '保存済みのデバイス（未接続）'
+        volume = '音量:'
+        pan = '定位（左 -100 ～ 右 +100）:'
+        pan_tip = '0で中央、-100で左のみ、100で右のみから再生します。'
+        dosukoi_alert = '満腹度が減少している時'
+        entou_alert = '遠投状態になった時'
+        capture_saved = 'キャプチャ画像を保存した時'
+        shop_price = '価格を識別した時'
+        help = 'VOICEVOXを起動してから使用してください。設定は保存後すぐに反映されます。デバイスの接続状態を変更した場合は、設定画面を開き直してください。'
     
     class music_pack:
         """楽曲パック設定タブ"""

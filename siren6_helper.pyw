@@ -70,6 +70,8 @@ except ImportError:
 startup_trace("imported keyboard")
 
 from src.config import (
+    ALERT_OUTPUT_SOUND,
+    ALERT_OUTPUT_VOICEVOX,
     CAPTURE_MODE_DIRECT,
     CAPTURE_MODE_FULLSCREEN,
     CAPTURE_MODE_OBS,
@@ -131,6 +133,8 @@ from src.update import start_auto_update_check
 startup_trace("imported src.update")
 from src.websocket_server import DataWebSocketServer
 startup_trace("imported src.websocket_server")
+from src.voice_guidance import VoiceGuidance, shop_price_announcement
+startup_trace("imported src.voice_guidance")
 
 logger = get_logger("new_siren6_helper")
 startup_trace("created logger")
@@ -336,6 +340,8 @@ class MainWindow(MainWindowUI):
         self.entou_status_miss_count = 0
         self.obs_dosukoi_alert_trigger_active = False
         self.obs_entou_alert_trigger_active = False
+        self.voice_dosukoi_alert_active = False
+        self.voice_entou_alert_active = False
         self.last_shop_result_signature = None
         self.last_shop_status_message = ""
         self.manual_shop_controls_syncing = False
@@ -359,6 +365,7 @@ class MainWindow(MainWindowUI):
         self.websocket_thread = None
         self.http_server = None
         self.http_server_config_signature = None
+        self.voice_guidance = VoiceGuidance(self.config)
         self.http_action_requested.connect(self.handle_http_action)
         self.start_websocket_server()
         self.start_http_server_if_enabled()
@@ -524,12 +531,17 @@ class MainWindow(MainWindowUI):
         old_port = self.config.websocket_data_port
         old_capture_mode = self.config.capture_mode
         old_http_signature = self.http_server_config_signature
+        old_alert_output = self.config.alert_output
         self.config.load_config()
+        self.voice_guidance.set_config(self.config)
         self.obs_manager.set_config(self.config)
         self.update_spout_capture()
         self.capture_interval = self.config.obs_capture_interval_seconds
         self.apply_manpuku_warning_volume()
-        if not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled:
+        if (
+            old_alert_output != self.config.alert_output
+            or (not self.config.dosukoi_alert_enabled and not self.config.entou_alert_enabled)
+        ):
             self.stop_manpuku_warning()
 
         self.setWindowFlag(Qt.WindowStaysOnTopHint, self.config.keep_on_top)
@@ -2160,6 +2172,10 @@ class MainWindow(MainWindowUI):
             filename = self.save_capture_screen(save_screen, suffix)
             logger.info("手動キャプチャ保存: %s", filename)
             self.statusBar().showMessage(f"保存しました -> {filename}", 10000)
+            self.voice_guidance.announce(
+                "capture_saved",
+                "キャプチャ画像を保存しました",
+            )
             return True
         except Exception as e:
             logger.error(f"画像保存エラー: {traceback.format_exc()}")
@@ -2209,12 +2225,16 @@ class MainWindow(MainWindowUI):
             return self.config.auto_capture_on_adventure_result
         return False
 
-    def save_auto_capture(self, screen, suffix):
+    def save_auto_capture(self, screen, suffix, voice_reason=None):
         try:
             filename = self.save_capture_screen(screen, suffix)
             if filename:
                 self.statusBar().showMessage(f"自動キャプチャしました -> {filename}", 10000)
                 logger.info("自動キャプチャ保存: %s", filename)
+                message = "自動キャプチャしました"
+                if voice_reason:
+                    message = f"{voice_reason}なので自動キャプチャしました"
+                self.voice_guidance.announce("capture_saved", message)
                 return True
         except Exception:
             logger.error(f"自動キャプチャ保存エラー: {traceback.format_exc()}")
@@ -2387,7 +2407,7 @@ class MainWindow(MainWindowUI):
                 self.last_auto_capture_result_seen_time = now
                 signature = adventure_result.label
                 if self.last_auto_capture_result_signature is None:
-                    if self.save_auto_capture(screen, signature):
+                    if self.save_auto_capture(screen, signature, "冒険の結果"):
                         self.last_auto_capture_result_signature = signature
                         self.last_auto_capture_result_saved_time = now
             elif (
@@ -2496,7 +2516,11 @@ class MainWindow(MainWindowUI):
             and self.auto_capture_enabled("floor_change")
             and self.should_auto_capture_floor(floor)
         ):
-            self.save_auto_capture(screen or self.latest_screen, self.format_floor_label(floor))
+            self.save_auto_capture(
+                screen or self.latest_screen,
+                self.format_floor_label(floor),
+                f"{floor}階",
+            )
 
         if auto_reset:
             dungeon_name = self.dungeon_combo.currentText()
@@ -2728,6 +2752,20 @@ class MainWindow(MainWindowUI):
         self.obs_dosukoi_alert_trigger_active = dosukoi_active
         self.obs_entou_alert_trigger_active = entou_active
 
+        voicevox_alerts = self.config.alert_output == ALERT_OUTPUT_VOICEVOX
+        if voicevox_alerts and dosukoi_active and not self.voice_dosukoi_alert_active:
+            self.voice_guidance.announce(
+                "dosukoi_alert",
+                "満腹度が減少しています",
+            )
+        if voicevox_alerts and entou_active and not self.voice_entou_alert_active:
+            self.voice_guidance.announce(
+                "entou_alert",
+                "遠投状態です",
+            )
+        self.voice_dosukoi_alert_active = voicevox_alerts and dosukoi_active
+        self.voice_entou_alert_active = voicevox_alerts and entou_active
+
     def start_manpuku_warning(self, status_message=None):
         if status_message:
             self.manpuku_warning_status_message = status_message
@@ -2735,11 +2773,15 @@ class MainWindow(MainWindowUI):
             self.statusBar().showMessage(self.manpuku_warning_status_message)
         if self.manpuku_warning_active:
             if (
-                self.manpuku_warning_sound
+                self.config.alert_output == ALERT_OUTPUT_SOUND
+                and self.manpuku_warning_sound
                 and self.manpuku_warning_sound.playbackState() != QMediaPlayer.PlayingState
             ):
                 self.manpuku_warning_sound.play()
                 logger.info("満腹度警告音を再開しました")
+            return
+        if self.config.alert_output == ALERT_OUTPUT_VOICEVOX:
+            self.manpuku_warning_active = True
             return
         if not self.manpuku_warning_sound:
             if not self.manpuku_warning_sound_error_logged:
@@ -3354,6 +3396,16 @@ class MainWindow(MainWindowUI):
         self.latest_shop_price_data = payload
         if self.websocket_server:
             self.websocket_server.update_shop_price_data(payload)
+        if not getattr(result, "manual", False):
+            candidate_names = []
+            for candidate in candidates:
+                name = candidate[0].name
+                if name not in candidate_names:
+                    candidate_names.append(name)
+            self.voice_guidance.announce(
+                "shop_price",
+                shop_price_announcement(result.price, category_label, candidate_names),
+            )
 
     def hide_shop_price_state_if_stale(self):
         if not self.shop_price_visible:
@@ -3509,6 +3561,7 @@ class MainWindow(MainWindowUI):
     def closeEvent(self, event):
         self.execute_obs_triggers("app_end")
         self.stop_manpuku_warning()
+        self.voice_guidance.shutdown()
         self.remove_global_hotkeys()
         self.main_timer.stop()
         self.display_timer.stop()

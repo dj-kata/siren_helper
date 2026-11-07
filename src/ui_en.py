@@ -57,6 +57,7 @@ class UIText:
     class tab:
         """Settings dialog tabs"""
         feature = 'Features'
+        voicevox = 'VOICEVOX Integration'
         music_pack = 'Music Packs'
         image_save = 'Image Saving'
         data_import = 'Data Import'
@@ -111,6 +112,27 @@ class UIText:
         dosukoi_alert_volume = 'Alert volume:'
         dosukoi_alert_threshold = 'Dosukoi alert threshold:'
         entou_alert_enabled = 'Enable Throwing status alert'
+        alert_output = 'Alert output:'
+        alert_output_sound = 'Warning sound'
+        alert_output_voicevox = 'VOICEVOX'
+
+    class voice:
+        basic_group = 'VOICEVOX Settings'
+        items_group = 'Announcements'
+        test = 'Test playback'
+        url = 'VOICEVOX engine URL:'
+        speaker = 'Voice style ID:'
+        output_device = 'Playback device:'
+        system_default = 'System default'
+        output_unavailable = 'Saved device (unavailable)'
+        volume = 'Volume:'
+        pan = 'Pan (Left -100 to Right +100):'
+        pan_tip = '0 is center, -100 is left only, and 100 is right only.'
+        dosukoi_alert = 'When fullness is decreasing'
+        entou_alert = 'When Throwing status is detected'
+        capture_saved = 'When a capture image is saved'
+        shop_price = 'When a price is identified'
+        help = 'Start VOICEVOX before use. Saved settings apply immediately. Reopen settings after connecting or disconnecting playback devices.'
     
     class music_pack:
         """Music pack settings tab"""
