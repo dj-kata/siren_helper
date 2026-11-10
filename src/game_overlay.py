@@ -310,6 +310,8 @@ class WarningOverlayWindow(OverlayWindow):
     """上下端に黄黒の警告帯とループ文字を描画する。"""
 
     BAND_HEIGHT_FULLHD = 58
+    TOP_CLEAR_X_FULLHD = 595
+    TOP_CLEAR_WIDTH_FULLHD = 227
 
     def __init__(self):
         super().__init__("Siren 6 warning overlay")
@@ -371,7 +373,10 @@ class WarningOverlayWindow(OverlayWindow):
         painter.setPen(QColor("#e60012"))
         painter.drawText(rect, Qt.AlignCenter, text)
 
-    def _draw_marquee(self, painter, rect, reverse=False):
+    def _draw_marquee(self, painter, rect, reverse=False, clip_rect=None):
+        painter.save()
+        if clip_rect is not None:
+            painter.setClipRect(clip_rect)
         message = "　◆ WARNING ◆　" + "　／　".join(self.messages)
         painter.setFont(
             QFont(
@@ -391,6 +396,7 @@ class WarningOverlayWindow(OverlayWindow):
             text_rect = QRectF(x, rect.top(), text_width, rect.height())
             self._draw_warning_text(painter, text_rect, message)
             x += pitch
+        painter.restore()
 
     def paintEvent(self, _event):
         if not self.messages:
@@ -403,11 +409,21 @@ class WarningOverlayWindow(OverlayWindow):
         )
         top = QRectF(0, 0, self.width(), band_height)
         bottom = QRectF(0, self.height() - band_height, self.width(), band_height)
-        for rect in (top, bottom):
+        scale_x = self.width() / 1920
+        clear_left = self.TOP_CLEAR_X_FULLHD * scale_x
+        clear_right = (
+            self.TOP_CLEAR_X_FULLHD + self.TOP_CLEAR_WIDTH_FULLHD
+        ) * scale_x
+        top_sections = (
+            QRectF(0, 0, clear_left, band_height),
+            QRectF(clear_right, 0, self.width() - clear_right, band_height),
+        )
+        for rect in (*top_sections, bottom):
             self._draw_stripes(painter, rect)
             painter.setPen(QPen(QColor("#e60012"), max(2, round(band_height * 0.06))))
             painter.drawRect(rect.adjusted(1, 1, -1, -1))
-        self._draw_marquee(painter, top)
+        for rect in top_sections:
+            self._draw_marquee(painter, top, clip_rect=rect)
         self._draw_marquee(painter, bottom, reverse=True)
 
 

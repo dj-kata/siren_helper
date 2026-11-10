@@ -148,7 +148,10 @@ class GameOverlayTest(unittest.TestCase):
         warning_image = warning.grab().toImage()
         self.assertFalse(warning_image.isNull())
         self.assertEqual(warning_image.pixelColor(960, 540).alpha(), 0)
+        self.assertEqual(warning_image.pixelColor(700, 10).alpha(), 0)
+        self.assertGreater(warning_image.pixelColor(100, 10).alpha(), 0)
         self.assertGreater(warning_image.pixelColor(960, 10).alpha(), 0)
+        self.assertGreater(warning_image.pixelColor(960, 1070).alpha(), 0)
         for window in (monster, shop, warning):
             self.assertTrue(window.windowFlags() & Qt.WindowTransparentForInput)
             self.assertTrue(window.windowFlags() & Qt.WindowDoesNotAcceptFocus)

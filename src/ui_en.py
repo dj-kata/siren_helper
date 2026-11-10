@@ -149,7 +149,7 @@ class UIText:
         entou_alert = 'When Throwing status is detected'
         capture_saved = 'When a capture image is saved'
         shop_price = 'When a price is identified'
-        help = 'Start VOICEVOX before use. Saved settings apply immediately. Reopen settings after connecting or disconnecting playback devices.'
+        help = 'Start VOICEVOX before use. On supported systems, GPU engine mode is recommended in VOICEVOX. Saved settings apply immediately. Reopen settings after connecting or disconnecting playback devices.'
     
     class music_pack:
         """Music pack settings tab"""

@@ -1,15 +1,19 @@
 """VOICEVOXによるキュー式音声案内。"""
 
+import hashlib
 import json
+import os
+from pathlib import Path
 import queue
 import random
 import threading
 import time
 from urllib.parse import urlencode
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from src.logger import get_logger
-from src.voice_audio import play_wav
+from src.voice_audio import StreamingPlaybackError, play_wav, play_wav_stream
 
 logger = get_logger(__name__)
 
@@ -37,76 +41,225 @@ VOICE_TEST_MESSAGES = (
     "25階なので自動キャプチャしました",
 )
 
+VOICE_CACHE_DIR = Path("cache") / "voicevox"
+STREAM_SEGMENT_SECONDS = 0.5
+_voicevox_request_lock = threading.Lock()
+_logged_engine_urls = set()
+_engine_log_attempts = {}
+_engine_log_lock = threading.Lock()
 
-def synthesize(text, url, speaker, timeout=30):
+
+def _audio_query(text, url, speaker, timeout):
     base_url = url.rstrip("/")
     query_url = f'{base_url}/audio_query?{urlencode({"text": text, "speaker": speaker})}'
     with urlopen(
         Request(query_url, data=b"", method="POST"),
         timeout=timeout,
     ) as response:
-        query = json.load(response)
-    request = Request(
-        f'{base_url}/synthesis?{urlencode({"speaker": speaker})}',
+        return json.load(response)
+
+
+def _synthesis_request(query, url, speaker, endpoint="synthesis"):
+    base_url = url.rstrip("/")
+    parameters = {"speaker": speaker}
+    if endpoint == "streaming_synthesis":
+        parameters["segment_length"] = STREAM_SEGMENT_SECONDS
+    return Request(
+        f'{base_url}/{endpoint}?{urlencode(parameters)}',
         data=json.dumps(query).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urlopen(request, timeout=timeout) as response:
-        return response.read()
 
 
-def synthesize_with_retry(text, url, speaker, timeout, category="preview"):
-    attempts = 2
-    for attempt in range(1, attempts + 1):
-        started_at = time.monotonic()
-        logger.info(
-            "VOICEVOX音声合成を開始します: category=%s attempt=%d/%d "
-            "timeout=%ss speaker=%s text=%r",
-            category,
-            attempt,
-            attempts,
-            timeout,
-            speaker,
-            text,
-        )
+def _cache_path(url, speaker, text):
+    cache_key = json.dumps(
+        [url.rstrip("/"), int(speaker), str(text)],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return VOICE_CACHE_DIR / f"{hashlib.sha256(cache_key).hexdigest()}.wav"
+
+
+def load_cached_wav(url, speaker, text):
+    path = _cache_path(url, speaker, text)
+    try:
+        wav = path.read_bytes()
+        if not wav.startswith(b"RIFF") or wav[8:12] != b"WAVE":
+            raise ValueError("WAVヘッダーが不正です")
+        return wav
+    except FileNotFoundError:
+        return None
+    except Exception:
+        logger.warning("VOICEVOX音声キャッシュを読み込めません: path=%s", path)
+        return None
+
+
+def save_cached_wav(url, speaker, text, wav):
+    if not wav:
+        return
+    path = _cache_path(url, speaker, text)
+    temporary = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_bytes(wav)
+        os.replace(temporary, path)
+    except Exception:
+        logger.warning("VOICEVOX音声キャッシュを保存できません: path=%s", path)
         try:
-            wav = synthesize(text, url, speaker, timeout)
-        except TimeoutError:
-            elapsed = time.monotonic() - started_at
-            if attempt < attempts:
-                logger.warning(
-                    "VOICEVOX音声合成がタイムアウトしたため再試行します: "
-                    "category=%s attempt=%d/%d elapsed=%.3fs text=%r",
-                    category,
-                    attempt,
-                    attempts,
-                    elapsed,
-                    text,
-                )
-                continue
-            logger.error(
-                "VOICEVOX音声合成が再試行後もタイムアウトしました: "
-                "category=%s attempt=%d/%d elapsed=%.3fs text=%r",
+            temporary.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+
+def log_engine_capabilities(url, timeout):
+    base_url = url.rstrip("/")
+    now = time.monotonic()
+    with _engine_log_lock:
+        if base_url in _logged_engine_urls:
+            return
+        if now - _engine_log_attempts.get(base_url, 0) < 60:
+            return
+        _engine_log_attempts[base_url] = now
+    try:
+        with urlopen(f"{base_url}/supported_devices", timeout=min(timeout, 3)) as response:
+            devices = json.load(response)
+        with urlopen(f"{base_url}/engine_manifest", timeout=min(timeout, 3)) as response:
+            manifest = json.load(response)
+        supported_features = manifest.get("supported_features", {})
+        streaming_feature = supported_features.get("streaming_synthesis", False)
+        if isinstance(streaming_feature, dict):
+            streaming_feature = streaming_feature.get("value", False)
+        logger.info(
+            "VOICEVOXエンジン情報: cpu=%s cuda=%s dml=%s "
+            "streaming_synthesis=%s",
+            devices.get("cpu"),
+            devices.get("cuda"),
+            devices.get("dml"),
+            bool(streaming_feature),
+        )
+        if not devices.get("cuda") and not devices.get("dml"):
+            logger.info("VOICEVOXはCPUのみ利用可能です")
+        with _engine_log_lock:
+            _logged_engine_urls.add(base_url)
+    except Exception:
+        logger.warning("VOICEVOXエンジン情報を取得できません", exc_info=True)
+
+
+def _timeout_error(error):
+    if isinstance(error, StreamingPlaybackError):
+        error = error.original_error
+    if isinstance(error, URLError):
+        error = error.reason
+    return isinstance(error, TimeoutError)
+
+
+def synthesize_streaming_and_play(
+    text,
+    url,
+    speaker,
+    device_id,
+    volume,
+    pan,
+    timeout,
+    category="preview",
+):
+    """ストリーミング優先で合成・再生し、完成したWAVを返す。"""
+    log_engine_capabilities(url, timeout)
+    attempts = 2
+    with _voicevox_request_lock:
+        for attempt in range(1, attempts + 1):
+            started_at = time.monotonic()
+            standard_fallback = False
+            logger.info(
+                "VOICEVOXストリーミング合成を開始します: "
+                "category=%s attempt=%d/%d timeout=%ss speaker=%s text=%r",
                 category,
                 attempt,
                 attempts,
-                elapsed,
+                timeout,
+                speaker,
                 text,
             )
-            raise
-        elapsed = time.monotonic() - started_at
-        logger.info(
-            "VOICEVOX音声合成が完了しました: category=%s attempt=%d/%d "
-            "elapsed=%.3fs bytes=%d text=%r",
-            category,
-            attempt,
-            attempts,
-            elapsed,
-            len(wav),
-            text,
-        )
-        return wav
+            try:
+                query = _audio_query(text, url, speaker, timeout)
+                request = _synthesis_request(
+                    query,
+                    url,
+                    speaker,
+                    "streaming_synthesis",
+                )
+                try:
+                    with urlopen(request, timeout=timeout) as response:
+                        stream_started_at = time.monotonic()
+                        wav, first_audio_seconds = play_wav_stream(
+                            response,
+                            device_id,
+                            volume,
+                            pan,
+                        )
+                    first_audio_seconds += stream_started_at - started_at
+                    logger.info(
+                        "VOICEVOXストリーミング再生が完了しました: "
+                        "category=%s attempt=%d/%d first_audio=%.3fs "
+                        "elapsed=%.3fs bytes=%d text=%r",
+                        category,
+                        attempt,
+                        attempts,
+                        first_audio_seconds,
+                        time.monotonic() - started_at,
+                        len(wav),
+                        text,
+                    )
+                    return wav
+                except HTTPError as error:
+                    if error.code not in (404, 405, 422):
+                        raise
+                    logger.warning(
+                        "VOICEVOXがストリーミング合成に対応していないため"
+                        "通常合成へフォールバックします: status=%s",
+                        error.code,
+                    )
+                    standard_fallback = True
+                    request = _synthesis_request(query, url, speaker)
+                    with urlopen(request, timeout=timeout) as response:
+                        wav = response.read()
+                    play_wav(wav, device_id, volume, pan)
+                    logger.info(
+                        "VOICEVOX通常合成の再生が完了しました: "
+                        "category=%s elapsed=%.3fs bytes=%d text=%r",
+                        category,
+                        time.monotonic() - started_at,
+                        len(wav),
+                        text,
+                    )
+                    return wav
+            except Exception as error:
+                audio_started = isinstance(error, StreamingPlaybackError) and (
+                    error.audio_started
+                )
+                can_retry = _timeout_error(error) and not audio_started
+                can_retry = can_retry and not standard_fallback
+                if can_retry and attempt < attempts:
+                    logger.warning(
+                        "VOICEVOX音声受信前にタイムアウトしたため再試行します: "
+                        "category=%s attempt=%d/%d elapsed=%.3fs text=%r",
+                        category,
+                        attempt,
+                        attempts,
+                        time.monotonic() - started_at,
+                        text,
+                    )
+                    continue
+                if audio_started:
+                    logger.error(
+                        "VOICEVOX音声の再生開始後に失敗したため再試行しません: "
+                        "category=%s elapsed=%.3fs text=%r",
+                        category,
+                        time.monotonic() - started_at,
+                        text,
+                    )
+                raise
 
 
 class VoicePreviewThread(threading.Thread):
@@ -123,20 +276,21 @@ class VoicePreviewThread(threading.Thread):
     def run(self):
         try:
             text = random.choice(VOICE_TEST_MESSAGES)
-            wav = synthesize_with_retry(
-                text,
-                self.url,
-                self.speaker,
-                self.timeout,
-            )
-            started_at = time.monotonic()
-            logger.info("VOICEVOXテスト再生を開始します: text=%r", text)
-            play_wav(wav, self.device_id, self.volume, self.pan)
-            logger.info(
-                "VOICEVOXテスト再生が完了しました: elapsed=%.3fs text=%r",
-                time.monotonic() - started_at,
-                text,
-            )
+            wav = load_cached_wav(self.url, self.speaker, text)
+            if wav is not None:
+                logger.info("VOICEVOXテスト再生にキャッシュを使用します: text=%r", text)
+                play_wav(wav, self.device_id, self.volume, self.pan)
+            else:
+                wav = synthesize_streaming_and_play(
+                    text,
+                    self.url,
+                    self.speaker,
+                    self.device_id,
+                    self.volume,
+                    self.pan,
+                    self.timeout,
+                )
+                save_cached_wav(self.url, self.speaker, text, wav)
         except Exception as error:
             self.failure = str(error) or type(error).__name__
             logger.exception(
@@ -272,16 +426,31 @@ class VoiceGuidance:
                     text,
                 )
                 if key not in cache:
-                    wav = synthesize_with_retry(
-                        text,
-                        key[0],
-                        key[1],
-                        settings["voicevox_timeout_seconds"],
-                        category,
-                    )
-                    if len(cache) >= 64:
-                        cache.clear()
-                    cache[key] = wav
+                    cached_wav = load_cached_wav(key[0], key[1], text)
+                    if cached_wav is not None:
+                        logger.info(
+                            "VOICEVOX永続キャッシュを使用します: "
+                            "category=%s text=%r",
+                            category,
+                            text,
+                        )
+                        cache[key] = cached_wav
+                    else:
+                        wav = synthesize_streaming_and_play(
+                            text,
+                            key[0],
+                            key[1],
+                            settings["voice_output_device"],
+                            settings["voice_volume"],
+                            settings["voice_pan"],
+                            settings["voicevox_timeout_seconds"],
+                            category,
+                        )
+                        save_cached_wav(key[0], key[1], text, wav)
+                        if len(cache) >= 64:
+                            cache.clear()
+                        cache[key] = wav
+                        continue
                 else:
                     logger.info(
                         "VOICEVOX音声合成キャッシュを使用します: "

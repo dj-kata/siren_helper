@@ -8,17 +8,29 @@ import unittest
 import wave
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
 import numpy as np
+from PySide6.QtMultimedia import QtAudio
 
 from src.config import ALERT_OUTPUT_VOICEVOX, Config
 from src.http_server import BrowserHTTPServer
-from src.voice_audio import apply_pan, wav_pcm
+from src.voice_audio import (
+    _StreamingPlaybackThread,
+    StreamingPlaybackError,
+    apply_pan,
+    streaming_playback_complete,
+    streaming_wav_header,
+    wav_pcm,
+)
 from src.voice_guidance import (
     VoiceGuidance,
+    load_cached_wav,
+    save_cached_wav,
     shop_price_announcement,
     start_voice_preview,
+    synthesize_streaming_and_play,
 )
 
 
@@ -47,6 +59,55 @@ class VoiceAudioTest(unittest.TestCase):
         result, same_format = apply_pan(pcm, audio_format, 0)
         self.assertIs(result, pcm)
         self.assertIs(same_format, audio_format)
+
+    def test_streaming_wav_header_finds_pcm_start_and_format(self):
+        wav = wav_data()
+        pcm_offset, audio_format = streaming_wav_header(wav)
+
+        self.assertEqual(wav[pcm_offset:], np.array([1000, -1000], dtype="<i2").tobytes())
+        self.assertEqual(audio_format.sampleRate(), 24000)
+        self.assertEqual(audio_format.channelCount(), 1)
+
+    def test_streaming_playback_completes_when_active_sink_processed_all_audio(self):
+        sink = MagicMock()
+        sink.state.return_value = QtAudio.State.ActiveState
+        sink.processedUSecs.return_value = 1_000_000
+
+        self.assertTrue(streaming_playback_complete(sink, 1_000_000))
+
+    def test_streaming_playback_waits_while_active_sink_has_audio_remaining(self):
+        sink = MagicMock()
+        sink.state.return_value = QtAudio.State.ActiveState
+        sink.processedUSecs.return_value = 999_999
+
+        self.assertFalse(streaming_playback_complete(sink, 1_000_000))
+
+    @patch("src.voice_audio.QAudioSink")
+    @patch("src.voice_audio.resolve_audio_device")
+    def test_streaming_player_writes_pcm_before_response_finishes(
+        self,
+        resolve_device,
+        audio_sink,
+    ):
+        wav = wav_data(samples=tuple(range(200)))
+        chunks = [wav[:17], wav[17:51], wav[51:173], wav[173:], b""]
+        response = MagicMock()
+        response.read.side_effect = chunks
+        resolve_device.return_value.isFormatSupported.return_value = True
+        sink = audio_sink.return_value
+        sink.error.return_value = QtAudio.Error.NoError
+        sink.bytesFree.return_value = 65536
+        sink.state.return_value = QtAudio.State.IdleState
+        output = sink.start.return_value
+        output.write.side_effect = lambda data: len(data)
+
+        worker = _StreamingPlaybackThread(response, "", 100, 0)
+        worker.run()
+
+        self.assertIsNone(worker.failure)
+        self.assertTrue(worker.audio_started)
+        self.assertEqual(worker.wav, wav)
+        self.assertGreaterEqual(output.write.call_count, 2)
 
 
 class HTTPServerErrorTest(unittest.TestCase):
@@ -91,84 +152,74 @@ class VoiceGuidanceTest(unittest.TestCase):
             "6500ギタン腕輪、毒消しか忍び足です",
         )
 
-    @patch("src.voice_guidance.play_wav")
-    @patch("src.voice_guidance.synthesize", return_value=b"wav")
-    def test_enabled_message_is_synthesized_and_played(self, synthesize, play_wav):
+    @patch("src.voice_guidance.save_cached_wav")
+    @patch("src.voice_guidance.load_cached_wav", return_value=None)
+    @patch("src.voice_guidance.synthesize_streaming_and_play", return_value=b"wav")
+    def test_enabled_message_is_streamed_and_cached(
+        self,
+        stream_play,
+        _load_cache,
+        save_cache,
+    ):
         guidance = VoiceGuidance(self.config(voice_capture_saved=True))
         try:
             guidance.announce("capture_saved", "キャプチャ画像を保存しました")
             deadline = time.monotonic() + 2
-            while not play_wav.called and time.monotonic() < deadline:
+            while not stream_play.called and time.monotonic() < deadline:
                 time.sleep(0.01)
         finally:
             guidance.shutdown()
 
-        synthesize.assert_called_once_with(
+        stream_play.assert_called_once_with(
             "キャプチャ画像を保存しました",
             "http://127.0.0.1:50021",
             3,
+            "device-id",
+            80,
+            -25,
             30,
+            "capture_saved",
         )
-        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
+        save_cache.assert_called_once_with(
+            "http://127.0.0.1:50021",
+            3,
+            "キャプチャ画像を保存しました",
+            b"wav",
+        )
 
-    @patch("src.voice_guidance.synthesize")
-    def test_disabled_message_is_ignored(self, synthesize):
+    @patch("src.voice_guidance.synthesize_streaming_and_play")
+    def test_disabled_message_is_ignored(self, stream_play):
         guidance = VoiceGuidance(self.config())
         guidance.announce("shop_price", "6500ギタン腕輪、毒消しです")
         time.sleep(0.15)
         guidance.shutdown()
-        synthesize.assert_not_called()
+        stream_play.assert_not_called()
 
-    @patch("src.voice_guidance.play_wav")
-    @patch(
-        "src.voice_guidance.synthesize",
-        side_effect=(TimeoutError("timed out"), b"wav"),
-    )
-    def test_synthesis_timeout_is_retried_once(self, synthesize, play_wav):
-        guidance = VoiceGuidance(self.config(voice_capture_saved=True))
-        try:
-            guidance.announce("capture_saved", "キャプチャ画像を保存しました")
-            deadline = time.monotonic() + 2
-            while not play_wav.called and time.monotonic() < deadline:
-                time.sleep(0.01)
-        finally:
-            guidance.shutdown()
-
-        self.assertEqual(synthesize.call_count, 2)
-        synthesize.assert_called_with(
-            "キャプチャ画像を保存しました",
-            "http://127.0.0.1:50021",
-            3,
-            30,
-        )
-        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
-
-    @patch("src.voice_guidance.play_wav")
-    @patch("src.voice_guidance.synthesize", return_value=b"wav")
-    def test_startup_announcement_uses_its_own_switch(self, synthesize, play_wav):
+    @patch("src.voice_guidance.load_cached_wav", return_value=None)
+    @patch("src.voice_guidance.synthesize_streaming_and_play", return_value=b"wav")
+    def test_startup_announcement_uses_its_own_switch(
+        self,
+        stream_play,
+        _load_cache,
+    ):
         guidance = VoiceGuidance(self.config(voice_startup=True))
         try:
             guidance.announce("startup", "シレン6ヘルパーを起動しました")
             deadline = time.monotonic() + 2
-            while not play_wav.called and time.monotonic() < deadline:
+            while not stream_play.called and time.monotonic() < deadline:
                 time.sleep(0.01)
         finally:
             guidance.shutdown()
 
-        synthesize.assert_called_once_with(
-            "シレン6ヘルパーを起動しました",
-            "http://127.0.0.1:50021",
-            3,
-            30,
-        )
+        self.assertEqual(stream_play.call_args.args[-1], "startup")
 
     @patch("src.voice_guidance.random.choice", return_value="遠投状態です")
+    @patch("src.voice_guidance.load_cached_wav", return_value=b"wav")
     @patch("src.voice_guidance.play_wav", side_effect=RuntimeError("device error"))
-    @patch("src.voice_guidance.synthesize", return_value=b"wav")
     def test_preview_uses_random_event_message_and_exposes_playback_failure(
         self,
-        synthesize,
         _play_wav,
+        _load_cache,
         choice,
     ):
         worker = start_voice_preview("http://127.0.0.1:50021", 1)
@@ -177,68 +228,160 @@ class VoiceGuidanceTest(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(worker.failure, "device error")
         choice.assert_called_once()
-        synthesize.assert_called_once_with(
-            "遠投状態です",
-            "http://127.0.0.1:50021",
-            1,
-            30,
-        )
 
-    @patch("src.voice_guidance.play_wav")
-    @patch("src.voice_guidance.synthesize", return_value=b"wav")
+    @patch("src.voice_guidance.load_cached_wav", return_value=None)
+    @patch("src.voice_guidance.synthesize_streaming_and_play", return_value=b"wav")
     def test_shutdown_announcement_finishes_before_worker_exits(
         self,
-        synthesize,
-        play_wav,
+        stream_play,
+        _load_cache,
     ):
         guidance = VoiceGuidance(self.config(voice_shutdown=True))
         guidance.shutdown()
         guidance._worker.join(timeout=2)
 
         self.assertTrue(guidance.is_finished())
-        synthesize.assert_called_once_with(
-            "シレン6ヘルパーを終了します",
-            "http://127.0.0.1:50021",
-            3,
-            30,
-        )
-        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
+        self.assertEqual(stream_play.call_args.args[-1], "shutdown")
 
     @patch("src.voice_guidance.play_wav")
-    @patch("src.voice_guidance.synthesize", return_value=b"wav")
-    def test_error_is_announced_once_until_recovery(self, synthesize, play_wav):
+    @patch("src.voice_guidance.load_cached_wav", return_value=None)
+    @patch("src.voice_guidance.synthesize_streaming_and_play", return_value=b"wav")
+    def test_error_is_announced_once_until_recovery(
+        self,
+        stream_play,
+        _load_cache,
+        play_wav,
+    ):
         guidance = VoiceGuidance(self.config(voice_errors=True))
         try:
             guidance.error_state("http", "HTTPサーバーを起動できません")
             guidance.error_state("http", "HTTPサーバーを起動できません")
             deadline = time.monotonic() + 2
-            while play_wav.call_count < 1 and time.monotonic() < deadline:
+            while not stream_play.called and time.monotonic() < deadline:
                 time.sleep(0.01)
 
             guidance.error_state("http")
             guidance.error_state("http", "HTTPサーバーを起動できません")
             deadline = time.monotonic() + 2
-            while play_wav.call_count < 2 and time.monotonic() < deadline:
+            while not play_wav.called and time.monotonic() < deadline:
                 time.sleep(0.01)
         finally:
             guidance.shutdown()
 
-        synthesize.assert_called_once_with(
-            "HTTPサーバーを起動できません",
-            "http://127.0.0.1:50021",
-            3,
-            30,
-        )
-        self.assertEqual(play_wav.call_count, 2)
+        self.assertEqual(stream_play.call_count, 1)
+        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
-    @patch("src.voice_guidance.synthesize")
-    def test_error_is_ignored_when_error_voice_is_disabled(self, synthesize):
+    @patch("src.voice_guidance.synthesize_streaming_and_play")
+    def test_error_is_ignored_when_error_voice_is_disabled(self, stream_play):
         guidance = VoiceGuidance(self.config())
         guidance.error_state("spout", "Spoutの映像を受信できません")
         time.sleep(0.15)
         guidance.shutdown()
 
-        synthesize.assert_not_called()
+        stream_play.assert_not_called()
+
+    def test_persistent_cache_round_trip(self):
+        with tempfile.TemporaryDirectory() as temp_dir, patch(
+            "src.voice_guidance.VOICE_CACHE_DIR",
+            Path(temp_dir),
+        ):
+            save_cached_wav("http://127.0.0.1:50021", 3, "テスト", wav_data())
+            cached = load_cached_wav("http://127.0.0.1:50021", 3, "テスト")
+
+        self.assertEqual(cached, wav_data())
+
+    @patch("src.voice_guidance.log_engine_capabilities")
+    @patch("src.voice_guidance._audio_query", return_value={})
+    @patch("src.voice_guidance.play_wav_stream")
+    @patch("src.voice_guidance.urlopen")
+    def test_timeout_before_audio_is_retried_once(
+        self,
+        urlopen,
+        play_stream,
+        _audio_query,
+        _capabilities,
+    ):
+        response = MagicMock()
+        urlopen.return_value.__enter__.return_value = response
+        play_stream.side_effect = (
+            StreamingPlaybackError(TimeoutError("timed out"), False),
+            (b"wav", 0.25),
+        )
+
+        result = synthesize_streaming_and_play(
+            "テスト",
+            "http://127.0.0.1:50021",
+            3,
+            "device-id",
+            80,
+            0,
+            30,
+        )
+
+        self.assertEqual(result, b"wav")
+        self.assertEqual(play_stream.call_count, 2)
+
+    @patch("src.voice_guidance.log_engine_capabilities")
+    @patch("src.voice_guidance._audio_query", return_value={})
+    @patch(
+        "src.voice_guidance.play_wav_stream",
+        side_effect=StreamingPlaybackError(TimeoutError("timed out"), True),
+    )
+    @patch("src.voice_guidance.urlopen")
+    def test_timeout_after_audio_started_is_not_retried(
+        self,
+        urlopen,
+        play_stream,
+        _audio_query,
+        _capabilities,
+    ):
+        urlopen.return_value.__enter__.return_value = MagicMock()
+
+        with self.assertRaises(StreamingPlaybackError):
+            synthesize_streaming_and_play(
+                "テスト",
+                "http://127.0.0.1:50021",
+                3,
+                "device-id",
+                80,
+                0,
+                30,
+            )
+
+        self.assertEqual(play_stream.call_count, 1)
+
+    @patch("src.voice_guidance.log_engine_capabilities")
+    @patch("src.voice_guidance._audio_query", return_value={})
+    @patch("src.voice_guidance.play_wav")
+    @patch("src.voice_guidance.urlopen")
+    def test_unsupported_streaming_falls_back_to_standard_synthesis(
+        self,
+        urlopen,
+        play_wav,
+        _audio_query,
+        _capabilities,
+    ):
+        standard_response = MagicMock()
+        standard_response.read.return_value = b"wav"
+        standard_context = MagicMock()
+        standard_context.__enter__.return_value = standard_response
+        urlopen.side_effect = (
+            HTTPError("http://voicevox/streaming_synthesis", 404, "", {}, None),
+            standard_context,
+        )
+
+        result = synthesize_streaming_and_play(
+            "テスト",
+            "http://127.0.0.1:50021",
+            3,
+            "device-id",
+            80,
+            0,
+            30,
+        )
+
+        self.assertEqual(result, b"wav")
+        play_wav.assert_called_once_with(b"wav", "device-id", 80, 0)
 
 
 class VoiceConfigTest(unittest.TestCase):
