@@ -280,6 +280,9 @@ class ConfigDialog(QDialog):
         self.voicevox_url_edit.setPlaceholderText("http://127.0.0.1:50021")
         self.voicevox_speaker_spin = QSpinBox()
         self.voicevox_speaker_spin.setRange(0, 2147483647)
+        self.voicevox_timeout_spin = QSpinBox()
+        self.voicevox_timeout_spin.setRange(1, 300)
+        self.voicevox_timeout_spin.setSuffix(self.ui.voice.timeout_suffix)
         self.voice_output_combo = QComboBox()
         self.voice_output_combo.addItem(self.ui.voice.system_default, "")
         for device_id, name in audio_output_devices():
@@ -292,6 +295,7 @@ class ConfigDialog(QDialog):
         self.voice_pan_spin.setToolTip(self.ui.voice.pan_tip)
         form.addRow(self.ui.voice.url, self.voicevox_url_edit)
         form.addRow(self.ui.voice.speaker, self.voicevox_speaker_spin)
+        form.addRow(self.ui.voice.timeout, self.voicevox_timeout_spin)
         form.addRow(self.ui.voice.output_device, self.voice_output_combo)
         form.addRow(self.ui.voice.volume, self.voice_volume_spin)
         form.addRow(self.ui.voice.pan, self.voice_pan_spin)
@@ -339,6 +343,7 @@ class ConfigDialog(QDialog):
             self.voice_output_combo.currentData() or "",
             self.voice_volume_spin.value(),
             self.voice_pan_spin.value(),
+            self.voicevox_timeout_spin.value(),
         )
         self.voice_test_button.setEnabled(False)
         self.voice_test_timer.start()
@@ -433,6 +438,7 @@ class ConfigDialog(QDialog):
         )
         self.voicevox_url_edit.setText(self.config.voicevox_url)
         self.voicevox_speaker_spin.setValue(self.config.voicevox_speaker_id)
+        self.voicevox_timeout_spin.setValue(self.config.voicevox_timeout_seconds)
         output_index = self.voice_output_combo.findData(self.config.voice_output_device)
         if output_index < 0 and self.config.voice_output_device:
             self.voice_output_combo.addItem(
@@ -514,6 +520,7 @@ class ConfigDialog(QDialog):
             or "http://127.0.0.1:50021"
         )
         self.config.voicevox_speaker_id = self.voicevox_speaker_spin.value()
+        self.config.voicevox_timeout_seconds = self.voicevox_timeout_spin.value()
         self.config.voice_output_device = self.voice_output_combo.currentData() or ""
         self.config.voice_volume = self.voice_volume_spin.value()
         self.config.voice_pan = self.voice_pan_spin.value()

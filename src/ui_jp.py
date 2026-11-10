@@ -134,6 +134,8 @@ class UIText:
         test_failed = 'テスト音声を再生できませんでした。\n\n{error}'
         url = 'VOICEVOX接続先URL:'
         speaker = '音声のスタイルID:'
+        timeout = '通信タイムアウト:'
+        timeout_suffix = ' 秒'
         output_device = '再生先デバイス:'
         system_default = 'システムの既定'
         output_unavailable = '保存済みのデバイス（未接続）'

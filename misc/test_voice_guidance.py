@@ -73,6 +73,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "voice_shop_price": False,
             "voicevox_url": "http://127.0.0.1:50021",
             "voicevox_speaker_id": 3,
+            "voicevox_timeout_seconds": 30,
             "voice_output_device": "device-id",
             "voice_volume": 80,
             "voice_pan": -25,
@@ -106,6 +107,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "キャプチャ画像を保存しました",
             "http://127.0.0.1:50021",
             3,
+            30,
         )
         play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
@@ -116,6 +118,30 @@ class VoiceGuidanceTest(unittest.TestCase):
         time.sleep(0.15)
         guidance.shutdown()
         synthesize.assert_not_called()
+
+    @patch("src.voice_guidance.play_wav")
+    @patch(
+        "src.voice_guidance.synthesize",
+        side_effect=(TimeoutError("timed out"), b"wav"),
+    )
+    def test_synthesis_timeout_is_retried_once(self, synthesize, play_wav):
+        guidance = VoiceGuidance(self.config(voice_capture_saved=True))
+        try:
+            guidance.announce("capture_saved", "キャプチャ画像を保存しました")
+            deadline = time.monotonic() + 2
+            while not play_wav.called and time.monotonic() < deadline:
+                time.sleep(0.01)
+        finally:
+            guidance.shutdown()
+
+        self.assertEqual(synthesize.call_count, 2)
+        synthesize.assert_called_with(
+            "キャプチャ画像を保存しました",
+            "http://127.0.0.1:50021",
+            3,
+            30,
+        )
+        play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
     @patch("src.voice_guidance.play_wav")
     @patch("src.voice_guidance.synthesize", return_value=b"wav")
@@ -133,6 +159,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "シレン6ヘルパーを起動しました",
             "http://127.0.0.1:50021",
             3,
+            30,
         )
 
     @patch("src.voice_guidance.random.choice", return_value="遠投状態です")
@@ -154,6 +181,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "遠投状態です",
             "http://127.0.0.1:50021",
             1,
+            30,
         )
 
     @patch("src.voice_guidance.play_wav")
@@ -172,6 +200,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "シレン6ヘルパーを終了します",
             "http://127.0.0.1:50021",
             3,
+            30,
         )
         play_wav.assert_called_once_with(b"wav", "device-id", 80, -25)
 
@@ -198,6 +227,7 @@ class VoiceGuidanceTest(unittest.TestCase):
             "HTTPサーバーを起動できません",
             "http://127.0.0.1:50021",
             3,
+            30,
         )
         self.assertEqual(play_wav.call_count, 2)
 
@@ -222,6 +252,7 @@ class VoiceConfigTest(unittest.TestCase):
             config.voice_errors = True
             config.voice_shop_price = True
             config.voicevox_speaker_id = 42
+            config.voicevox_timeout_seconds = 45
             config.voice_output_device = "abc123"
             config.voice_volume = 60
             config.voice_pan = 75
@@ -235,6 +266,7 @@ class VoiceConfigTest(unittest.TestCase):
         self.assertTrue(loaded.voice_errors)
         self.assertTrue(loaded.voice_shop_price)
         self.assertEqual(loaded.voicevox_speaker_id, 42)
+        self.assertEqual(loaded.voicevox_timeout_seconds, 45)
         self.assertEqual(loaded.voice_output_device, "abc123")
         self.assertEqual(loaded.voice_volume, 60)
         self.assertEqual(loaded.voice_pan, 75)
@@ -247,6 +279,7 @@ class VoiceConfigTest(unittest.TestCase):
                     {
                         "alert_output": "invalid",
                         "voicevox_speaker_id": -5,
+                        "voicevox_timeout_seconds": 500,
                         "voice_volume": 500,
                         "voice_pan": -500,
                     }
@@ -257,6 +290,7 @@ class VoiceConfigTest(unittest.TestCase):
 
         self.assertEqual(config.alert_output, "sound")
         self.assertEqual(config.voicevox_speaker_id, 0)
+        self.assertEqual(config.voicevox_timeout_seconds, 300)
         self.assertEqual(config.voice_volume, 100)
         self.assertEqual(config.voice_pan, -100)
 

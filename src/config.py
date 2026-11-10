@@ -300,6 +300,15 @@ class Config:
                 0,
                 2147483647,
             )
+            self.voicevox_timeout_seconds = clamp_int(
+                config_data.get(
+                    "voicevox_timeout_seconds",
+                    self.voicevox_timeout_seconds,
+                ),
+                self.voicevox_timeout_seconds,
+                1,
+                300,
+            )
             self.voice_output_device = str(
                 config_data.get("voice_output_device", self.voice_output_device) or ""
             )

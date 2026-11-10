@@ -134,6 +134,8 @@ class UIText:
         test_failed = 'Could not play the test voice.\n\n{error}'
         url = 'VOICEVOX engine URL:'
         speaker = 'Voice style ID:'
+        timeout = 'Request timeout:'
+        timeout_suffix = ' sec'
         output_device = 'Playback device:'
         system_default = 'System default'
         output_unavailable = 'Saved device (unavailable)'
